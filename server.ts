@@ -361,78 +361,102 @@ const HTML = /* html */ `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Claude Terminal Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
-  :root { --bg:#0e0b1e; --panel:#171430; --panel2:#1f1b3d; --line:#2b2750; --ink:#e9e7f5; --muted:#9b96c4; --purple:#8b5cf6; --purple2:#a78bfa; --red:#f0506a; --green:#34d399; --amber:#fbbf24; }
+  :root {
+    /* neutros quentes — sem preto puro, sem tom roxo */
+    --bg: oklch(20% 0.006 70); --surface: oklch(24% 0.006 70); --surface-2: oklch(28% 0.008 72);
+    --line: oklch(33% 0.009 75); --ink: oklch(95% 0.008 85); --muted: oklch(70% 0.013 75);
+    /* acento de marca: clay/terracota (o tom quente do Claude) */
+    --clay: oklch(72% 0.115 50); --clay-ink: oklch(25% 0.04 50); --clay-soft: oklch(72% 0.115 50 / .15);
+    /* secundário: teal (Codex) */
+    --teal: oklch(76% 0.08 185); --teal-soft: oklch(76% 0.08 185 / .14);
+    /* semânticos */
+    --green: oklch(77% 0.1 160); --red: oklch(66% 0.16 25); --red-soft: oklch(66% 0.16 25 / .15);
+    --blue: oklch(72% 0.11 240); --blue-soft: oklch(72% 0.11 240 / .15);
+    /* tipografia */
+    --display: "Fraunces", Georgia, serif; --body: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+    /* espaço (7 passos) e raio */
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:36px; --s7:56px; --r:12px; --r-sm:8px;
+  }
   * { box-sizing:border-box; }
-  body { margin:0; font-family:ui-sans-serif,system-ui,"Segoe UI",sans-serif; background:
-    radial-gradient(1000px 500px at 100% -10%, rgba(139,92,246,.12), transparent 60%), var(--bg); color:var(--ink); min-height:100vh; }
-  .wrap { max-width:960px; margin:0 auto; padding:28px 20px 60px; }
-  header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:22px; }
-  h1 { font-size:19px; margin:0; display:flex; align-items:center; gap:10px; letter-spacing:.2px; }
-  .dot { width:9px; height:9px; border-radius:50%; background:var(--green); box-shadow:0 0 0 4px rgba(52,211,153,.18); animation:pulse 2s infinite; }
-  @keyframes pulse { 50% { opacity:.45; } }
-  .sub { color:var(--muted); font-size:12px; }
-  .tabs { display:flex; gap:4px; margin-bottom:22px; border-bottom:1px solid var(--line); }
-  .tab { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); font-weight:600; font-size:13.5px; padding:10px 14px; margin-bottom:-1px; cursor:pointer; transition:.15s; display:flex; align-items:center; gap:8px; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased; min-height:100vh; }
+  .wrap { max-width:880px; margin:0 auto; padding:var(--s6) var(--s4) var(--s7); }
+  header { display:flex; align-items:baseline; justify-content:space-between; gap:var(--s4); margin-bottom:var(--s5); }
+  h1 { font-family:var(--display); font-weight:500; font-size:23px; letter-spacing:-.01em; margin:0; display:flex; align-items:center; gap:var(--s3); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none; }
+  .dot.live { background:var(--green); }
+  .sub { color:var(--muted); font-size:13px; font-variant-numeric:tabular-nums; }
+  .tabs { display:flex; gap:var(--s1); margin-bottom:var(--s5); border-bottom:1px solid var(--line); }
+  .tab { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); font-family:var(--body); font-weight:600; font-size:14px; padding:var(--s3); margin-bottom:-1px; cursor:pointer; transition:color .15s,border-color .15s; display:flex; align-items:center; gap:var(--s2); }
   .tab:hover { color:var(--ink); }
-  .tab.active { color:var(--purple2); border-bottom-color:var(--purple2); }
-  .tab .badge { font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px; background:var(--panel2); border:1px solid var(--line); color:var(--muted); }
-  .tab.active .badge { color:var(--purple2); border-color:rgba(167,139,250,.4); background:rgba(139,92,246,.12); }
+  .tab.active { color:var(--ink); border-bottom-color:var(--clay); }
+  .tab .badge { font-size:11.5px; font-weight:600; padding:1px 8px; border-radius:999px; background:var(--surface-2); color:var(--muted); font-variant-numeric:tabular-nums; }
+  .tab.active .badge { color:var(--clay); background:var(--clay-soft); }
   .panel { display:none; }
-  .panel.active { display:block; animation:fade .2s ease; }
-  @keyframes fade { from { opacity:0; transform:translateY(4px); } }
-  .section-title { font-size:11px; text-transform:uppercase; letter-spacing:.16em; color:var(--muted); margin:26px 0 10px; }
-  .section-title:first-child { margin-top:6px; }
-  .card { background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin-bottom:12px; display:flex; align-items:center; gap:16px; overflow:hidden; }
+  .panel.active { display:block; animation:fade .18s ease-out; }
+  @keyframes fade { from { opacity:0; } }
+  h2.section-title { font-family:var(--display); font-weight:500; font-size:19px; letter-spacing:-.005em; color:var(--ink); margin:var(--s6) 0 var(--s3); }
+  .panel > h2.section-title:first-child { margin-top:var(--s2); }
+  .sess-head { margin:var(--s6) 0 var(--s3); } .sess-head h2 { margin:0; }
+  .section-title .sub { font-family:var(--body); font-weight:400; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:var(--s4); margin-bottom:var(--s2); display:flex; align-items:center; gap:var(--s4); }
   .card .main { min-width:0; flex:1; }
-  .cmd { font-family:ui-monospace,"JetBrains Mono",monospace; font-size:13.5px; color:var(--ink); word-break:break-all; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; max-height:3.2em; cursor:help; }
-  .meta { margin-top:7px; display:flex; flex-wrap:wrap; gap:7px; align-items:center; }
-  .chip { font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
-  .chip.port { color:var(--purple2); border-color:rgba(167,139,250,.4); background:rgba(139,92,246,.12); }
-  .chip.up { color:var(--green); border-color:rgba(52,211,153,.35); }
-  .chip.pid { color:var(--muted); }
-  .btn { border:0; cursor:pointer; font-weight:600; font-size:13px; padding:9px 16px; border-radius:10px; transition:.15s; white-space:nowrap; }
-  .btn-kill { background:rgba(240,80,106,.14); color:var(--red); border:1px solid rgba(240,80,106,.4); }
-  .btn-kill:hover { background:var(--red); color:#fff; }
-  .btn-ghost { background:transparent; color:var(--purple2); border:1px solid var(--line); padding:5px 12px; font-size:12px; }
-  .btn-ghost:hover { background:var(--panel); }
-  .btn-ghost:disabled { opacity:.5; cursor:default; }
-  .btn-ghost.on { background:var(--panel); color:var(--ink); border-color:var(--muted); }
-  .btn-copy { background:rgba(139,92,246,.14); color:var(--purple2); border:1px solid rgba(139,92,246,.4); }
-  .btn-copy:hover { background:var(--purple); color:#fff; }
-  .btn-arch { background:rgba(155,150,196,.10); color:var(--muted); border:1px solid var(--line); }
-  .btn-arch:hover { background:var(--panel); color:var(--ink); border-color:var(--muted); }
-  .btn-icon { padding:8px; line-height:0; display:inline-flex; align-items:center; }
-  .btn-vscode { background:rgba(36,156,255,.12); color:#3aa6ff; border:1px solid rgba(36,156,255,.4); }
-  .btn-vscode:hover { background:#249cff; color:#fff; }
+  .cmd { font-family:var(--mono); font-size:13px; line-height:1.5; color:var(--ink); word-break:break-all; display:-webkit-box; -webkit-line-clamp:2; line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .meta { margin-top:var(--s2); display:flex; flex-wrap:wrap; gap:var(--s2); align-items:center; }
+  .chip { font-size:12px; font-weight:500; padding:2px 9px; border-radius:999px; background:var(--surface-2); color:var(--muted); display:inline-flex; align-items:center; gap:6px; }
+  .chip.port { color:var(--clay); background:var(--clay-soft); }
+  .chip.up { color:var(--green); }
+  .chip.pid { font-family:var(--mono); font-size:11.5px; }
+  .chip.folder { font-family:var(--mono); font-size:11.5px; color:var(--ink); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chip.src-claude, .chip.src-codex { font-weight:600; }
+  .chip.src-claude { color:var(--clay); background:var(--clay-soft); }
+  .chip.src-codex { color:var(--teal); background:var(--teal-soft); }
+  .chip.src-claude::before, .chip.src-codex::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .btn { font-family:var(--body); border:1px solid transparent; cursor:pointer; font-weight:600; font-size:13px; padding:8px 14px; border-radius:var(--r-sm); transition:background .15s,color .15s,border-color .15s; white-space:nowrap; }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .btn-kill { background:var(--red-soft); color:var(--red); }
+  .btn-kill:hover { background:var(--red); color:var(--bg); }
+  .btn-ghost { background:transparent; color:var(--muted); border-color:var(--line); padding:6px 12px; font-size:12.5px; }
+  .btn-ghost:hover { color:var(--ink); border-color:var(--muted); }
+  .btn-ghost.on { color:var(--ink); border-color:var(--muted); background:var(--surface-2); }
+  .btn-copy { background:var(--clay); color:var(--clay-ink); }
+  .btn-copy:hover { background:oklch(78% .12 50); }
+  .btn-arch { background:transparent; color:var(--muted); border-color:var(--line); }
+  .btn-arch:hover { color:var(--ink); border-color:var(--muted); background:var(--surface-2); }
+  .btn-icon { padding:7px; line-height:0; display:inline-flex; align-items:center; }
+  .btn-vscode { background:var(--blue-soft); color:var(--blue); }
+  .btn-vscode:hover { background:var(--blue); color:var(--bg); }
   .btn-vscode svg { width:15px; height:15px; fill:currentColor; }
-  .actions { display:flex; gap:8px; flex-shrink:0; }
-  .card.dim { opacity:.6; }
+  .actions { display:flex; gap:var(--s2); flex-shrink:0; }
+  .card.dim { opacity:.55; }
   .card.dim:hover { opacity:1; }
-  .srcbar { display:flex; gap:8px; margin-bottom:12px; }
-  .src { display:inline-flex; align-items:center; gap:7px; padding:7px 14px; border-radius:999px; border:1px solid var(--line); background:var(--panel); color:var(--muted); font-weight:600; font-size:12.5px; cursor:pointer; transition:.15s; }
-  .src .ico { font-size:13px; }
+  .srcbar { display:flex; gap:var(--s2); margin-bottom:var(--s3); }
+  .src { display:inline-flex; align-items:center; gap:var(--s2); padding:7px 14px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--muted); font-family:var(--body); font-weight:600; font-size:12.5px; cursor:pointer; transition:.15s; }
+  .src .ico { width:7px; height:7px; border-radius:50%; background:currentColor; }
   .src:hover { color:var(--ink); }
-  #src-claude.on { background:rgba(139,92,246,.20); border-color:var(--purple); color:var(--purple2); }
-  #src-codex.on { background:rgba(52,211,153,.16); border-color:var(--green); color:var(--green); }
-  .chip.src-claude { color:var(--purple2); border-color:rgba(167,139,250,.4); background:rgba(139,92,246,.12); }
-  .chip.src-codex { color:var(--green); border-color:rgba(52,211,153,.35); background:rgba(52,211,153,.10); }
-  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-  .title { font-size:14.5px; font-weight:600; color:var(--ink); word-break:break-word; }
-  .chip.folder { color:var(--purple2); border-color:rgba(167,139,250,.35); background:rgba(139,92,246,.10); font-family:ui-monospace,"JetBrains Mono",monospace; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .filter { width:100%; margin-bottom:12px; padding:9px 12px; border-radius:10px; border:1px solid var(--line); background:var(--panel); color:var(--ink); font-size:13px; outline:none; }
-  .filter:focus { border-color:rgba(167,139,250,.5); }
+  #src-claude.on { background:var(--clay-soft); border-color:transparent; color:var(--clay); }
+  #src-codex.on { background:var(--teal-soft); border-color:transparent; color:var(--teal); }
+  .row { display:flex; align-items:baseline; justify-content:space-between; gap:var(--s3); }
+  .title { font-size:15px; font-weight:600; line-height:1.4; color:var(--ink); word-break:break-word; }
+  .filter { width:100%; margin-bottom:var(--s3); padding:9px 12px; border-radius:var(--r-sm); border:1px solid var(--line); background:var(--surface); color:var(--ink); font-family:var(--body); font-size:14px; outline:none; transition:border-color .15s; }
+  .filter:focus { border-color:var(--clay); }
   .filter::placeholder { color:var(--muted); }
-  .empty { color:var(--muted); text-align:center; padding:40px 0; border:1px dashed var(--line); border-radius:14px; }
-  a.open { color:var(--purple2); text-decoration:none; font-size:12px; }
-  .foot { margin-top:30px; color:var(--muted); font-size:11.5px; line-height:1.6; }
-  code { background:var(--panel); padding:1px 6px; border-radius:5px; color:var(--purple2); }
+  .empty { color:var(--muted); text-align:center; padding:var(--s7) var(--s4); border:1px dashed var(--line); border-radius:var(--r); }
+  a.open { color:var(--clay); text-decoration:none; font-size:12px; font-weight:600; }
+  a.open:hover { text-decoration:underline; }
+  .foot { max-width:68ch; margin-top:var(--s6); padding-top:var(--s4); border-top:1px solid var(--line); color:var(--muted); font-size:13px; line-height:1.65; }
+  .foot b { color:var(--ink); font-weight:600; }
+  code { font-family:var(--mono); background:var(--surface-2); padding:1px 6px; border-radius:5px; color:var(--ink); font-size:12.5px; }
 </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1><span class="dot"></span> Claude Terminal Control</h1>
+      <h1><span class="dot" id="status-dot"></span> Claude Terminal Control</h1>
       <div class="sub" id="status">atualizando…</div>
     </header>
 
@@ -442,36 +466,35 @@ const HTML = /* html */ `<!doctype html>
     </div>
 
     <section class="panel active" id="panel-watch">
-      <div class="section-title">Processos do Claude (background)</div>
+      <h2 class="section-title">Processos do Claude em background</h2>
       <div id="tasks"></div>
 
-      <div class="section-title">Containers Docker</div>
+      <h2 class="section-title">Containers Docker</h2>
       <div id="containers"></div>
     </section>
 
     <section class="panel" id="panel-sessions">
-      <div class="section-title row">
-        <span>Sessões <span class="sub" id="sess-count"></span></span>
+      <div class="row sess-head">
+        <h2 class="section-title">Sessões <span class="sub" id="sess-count"></span></h2>
         <span class="actions">
           <button class="btn btn-ghost" id="sess-archived-toggle" onclick="toggleArchived()">Arquivadas (0)</button>
-          <button class="btn btn-ghost" id="sess-reload" onclick="loadSessions()">↻ Atualizar</button>
+          <button class="btn btn-ghost" id="sess-reload" onclick="loadSessions()">Atualizar</button>
         </span>
       </div>
       <div class="srcbar">
-        <button class="src on" id="src-claude" onclick="toggleSource('claude')"><span class="ico">✶</span> Claude</button>
-        <button class="src" id="src-codex" onclick="toggleSource('codex')"><span class="ico">◆</span> Codex</button>
+        <button class="src on" id="src-claude" onclick="toggleSource('claude')"><span class="ico"></span> Claude</button>
+        <button class="src" id="src-codex" onclick="toggleSource('codex')"><span class="ico"></span> Codex</button>
       </div>
       <input class="filter" id="sess-filter" placeholder="filtrar por título ou pasta…" oninput="renderSessions()" />
       <div id="sessions"></div>
     </section>
 
     <div class="foot">
-      Processos e containers atualizam sozinhos a cada 2,5s. "Finalizar" mata o processo e seus filhos (SIGTERM).
+      Processos e containers atualizam sozinhos a cada 2,5s. <b>Finalizar</b> mata o processo e seus filhos com SIGTERM.
       As <b>sessões</b> são lidas sob demanda do <b>Claude</b> (<code>~/.claude/projects</code>) e do <b>Codex</b>
-      (<code>~/.codex/sessions</code>) — ligue as fontes e clique em <b>↻ Atualizar</b>. O ícone do <b>VS Code</b>
-      abre a pasta da sessão; "Retomar" copia o <code>claude --resume</code> / <code>codex resume</code>.
-      "Arquivar" só organiza a visão (não apaga nada).
-      Painel local em <code>localhost:7799</code> — só lê/mata na sua máquina.
+      (<code>~/.codex/sessions</code>): ligue as fontes e clique em <b>Atualizar</b>. O ícone do <b>VS Code</b>
+      abre a pasta da sessão, <b>Retomar</b> copia o comando <code>claude --resume</code> ou <code>codex resume</code>, e
+      <b>Arquivar</b> só organiza a visão (nada é apagado). Painel local em <code>localhost:7799</code>: só lê e mata na sua máquina.
     </div>
   </div>
 
@@ -489,11 +512,12 @@ async function kill(payload, label) {
 async function refresh() {
   let data;
   try { data = await (await fetch('/api/state')).json(); }
-  catch { document.getElementById('status').textContent = 'painel offline'; return; }
+  catch { document.getElementById('status').textContent = 'painel offline'; document.getElementById('status-dot').classList.remove('live'); return; }
 
   document.getElementById('status').textContent =
     data.tasks.length + ' processo(s) · ' + new Date(data.now).toLocaleTimeString('pt-BR');
   document.getElementById('badge-watch').textContent = data.tasks.length + data.containers.length;
+  document.getElementById('status-dot').classList.toggle('live', data.tasks.length > 0);
 
   const t = document.getElementById('tasks');
   t.innerHTML = data.tasks.length ? data.tasks.map(x => \`
@@ -503,18 +527,18 @@ async function refresh() {
         <div class="meta">
           <span class="chip pid">PID \${x.pid}</span>
           <span class="chip up">▲ \${fmtUp(x.etimes)}</span>
-          \${x.port ? \`<span class="chip port">:\${x.port}</span> <a class="open" href="http://localhost:\${x.port}" target="_blank">abrir ↗</a>\` : ''}
+          \${x.port ? \`<span class="chip port">porta \${x.port}</span> <a class="open" href="http://localhost:\${x.port}" target="_blank">abrir ↗</a>\` : ''}
         </div>
       </div>
-      <button class="btn btn-kill" onclick='kill(\${JSON.stringify({pid:x.pid})}, \${JSON.stringify("PID "+x.pid+" — "+x.cmd)})'>Finalizar</button>
-    </div>\`).join('') : '<div class="empty">Nada rodando pelo Claude agora 🎉</div>';
+      <button class="btn btn-kill" onclick='kill(\${JSON.stringify({pid:x.pid})}, \${JSON.stringify("PID "+x.pid+": "+x.cmd)})'>Finalizar</button>
+    </div>\`).join('') : '<div class="empty">Nada rodando pelo Claude agora.</div>';
 
   const c = document.getElementById('containers');
   c.innerHTML = data.containers.length ? data.containers.map(x => \`
     <div class="card">
       <div class="main">
-        <div class="cmd">🐳 \${esc(x.name)}</div>
-        <div class="meta"><span class="chip">\${esc(x.ports||'')}</span><span class="chip up">\${esc(x.status)}</span></div>
+        <div class="cmd">\${esc(x.name)}</div>
+        <div class="meta"><span class="chip">Docker</span>\${x.ports ? \`<span class="chip">\${esc(x.ports)}</span>\` : ''}<span class="chip up">\${esc(x.status)}</span></div>
       </div>
       <button class="btn btn-kill" onclick='kill(\${JSON.stringify({container:x.name})}, \${JSON.stringify("container "+x.name)})'>Parar</button>
     </div>\`).join('') : '<div class="empty">Nenhum container Docker ativo.</div>';
@@ -535,7 +559,7 @@ let showArchived = false;
 let sources = { claude: true, codex: false }; // default: só Claude
 const fmtAgo = (ms) => { const s = Math.floor((Date.now() - ms) / 1000);
   const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
-  return d ? d+'d' : h ? h+'h' : m ? m+'min' : 'agora'; };
+  return d ? 'há '+d+'d' : h ? 'há '+h+'h' : m ? 'há '+m+'min' : 'agora'; };
 
 function toggleSource(name) {
   sources[name] = !sources[name];
@@ -598,15 +622,15 @@ function renderSessions() {
       <div class="main">
         <div class="title">\${esc(s.title)}</div>
         <div class="meta">
-          <span class="chip src-\${s.source}">\${s.source === 'codex' ? '◆ Codex' : '✶ Claude'}</span>
-          <span class="chip folder" title="\${esc(s.folder)}">📁 \${esc(s.folder)}</span>
-          <span class="chip up">▲ \${fmtAgo(s.mtime)}</span>
+          <span class="chip src-\${s.source}">\${s.source === 'codex' ? 'Codex' : 'Claude'}</span>
+          <span class="chip folder" title="\${esc(s.folder)}">\${esc(s.folder)}</span>
+          <span class="chip up">\${fmtAgo(s.mtime)}</span>
           <span class="chip pid">\${esc(s.id.slice(0,8))}</span>
         </div>
       </div>
       <div class="actions">
         <button class="btn btn-vscode btn-icon" title="Abrir a pasta no VS Code" onclick='openIn(\${JSON.stringify(s.folder)}, this)'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
-        <button class="btn btn-copy" onclick='resume(\${JSON.stringify(s.folder)}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'>Retomar ⧉</button>
+        <button class="btn btn-copy" onclick='resume(\${JSON.stringify(s.folder)}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'>Retomar</button>
         <button class="btn btn-arch" onclick='archive(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${!s.archived}, this)'>\${s.archived ? 'Desarquivar' : 'Arquivar'}</button>
       </div>
     </div>\`).join('') : \`<div class="empty">\${emptyMsg}</div>\`;
@@ -629,6 +653,7 @@ function resume(folder, id, source, btn) {
 
 refresh();
 setInterval(refresh, 2500);
+if (location.hash === '#sessions') switchTab('sessions');
 </script>
 </body>
 </html>`;
