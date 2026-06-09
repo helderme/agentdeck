@@ -657,6 +657,7 @@ const HTML = /* html */ `<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script>(function(){try{var q=new URLSearchParams(location.search).get('theme');var t=(q==='light'||q==='dark')?q:localStorage.getItem('cc-theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.theme=t;}catch(e){}})();</script>
 <style>
   :root {
     /* neutros quentes — sem preto puro, sem tom roxo */
@@ -674,6 +675,15 @@ const HTML = /* html */ `<!doctype html>
     --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
     /* espaço (7 passos) e raio */
     --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:36px; --s7:56px; --r:12px; --r-sm:8px;
+  }
+  /* tema claro: off-white quente (não branco puro, não creme), acentos mais escuros pra contraste */
+  :root[data-theme="light"] {
+    --bg: oklch(97% 0.008 85); --surface: oklch(99.5% 0.003 85); --surface-2: oklch(94% 0.008 80);
+    --line: oklch(88% 0.01 80); --ink: oklch(28% 0.02 60); --muted: oklch(51% 0.02 65);
+    --clay: oklch(56% 0.14 45); --clay-ink: oklch(99% 0.01 85); --clay-soft: oklch(56% 0.14 45 / .12);
+    --teal: oklch(52% 0.09 195); --teal-soft: oklch(52% 0.09 195 / .12);
+    --green: oklch(54% 0.13 160); --red: oklch(55% 0.18 25); --red-soft: oklch(55% 0.18 25 / .12);
+    --blue: oklch(52% 0.15 250); --blue-soft: oklch(52% 0.15 250 / .12);
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased; min-height:100vh; }
@@ -717,7 +727,7 @@ const HTML = /* html */ `<!doctype html>
   .btn-ghost:hover { color:var(--ink); border-color:var(--muted); }
   .btn-ghost.on { color:var(--ink); border-color:var(--muted); background:var(--surface-2); }
   .btn-copy { background:var(--clay); color:var(--clay-ink); }
-  .btn-copy:hover { background:oklch(78% .12 50); }
+  .btn-copy:hover { filter:brightness(1.08); }
   .btn-arch { background:transparent; color:var(--muted); border-color:var(--line); }
   .btn-arch:hover { color:var(--ink); border-color:var(--muted); background:var(--surface-2); }
   .btn-icon { padding:7px; line-height:0; display:inline-flex; align-items:center; }
@@ -732,12 +742,25 @@ const HTML = /* html */ `<!doctype html>
   .card.dim:hover { opacity:1; }
   .srcbar { display:flex; gap:var(--s2); margin-bottom:var(--s3); }
   .src { display:inline-flex; align-items:center; gap:var(--s2); padding:7px 14px; border-radius:999px; border:1px solid var(--line); background:transparent; color:var(--muted); font-family:var(--body); font-weight:600; font-size:12.5px; cursor:pointer; transition:.15s; }
-  .src .ico { width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .src .ico { width:15px; height:15px; fill:currentColor; flex:none; }
   .src:hover { color:var(--ink); }
   #src-claude.on { background:var(--clay-soft); border-color:transparent; color:var(--clay); }
   #src-codex.on { background:var(--teal-soft); border-color:transparent; color:var(--teal); }
   .row { display:flex; align-items:baseline; justify-content:space-between; gap:var(--s3); }
   .title { font-size:15px; font-weight:600; line-height:1.4; color:var(--ink); word-break:break-word; }
+  .title-wrap { display:flex; align-items:center; gap:6px; min-width:0; }
+  .title-wrap .title { min-width:0; }
+  .title-wrap .btn-edit { padding:3px; border-color:transparent; opacity:.4; flex:none; }
+  .card:hover .title-wrap .btn-edit { opacity:.7; }
+  .title-wrap .btn-edit:hover { opacity:1; background:var(--surface-2); }
+  .title-edit { font-family:var(--body); font-size:15px; font-weight:600; color:var(--ink); background:var(--bg); border:1px solid var(--clay); border-radius:6px; padding:3px 9px; flex:1; min-width:0; outline:none; }
+  .title-wrap .ck { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
+  .hdr-right { display:flex; align-items:center; gap:var(--s3); }
+  #theme-btn { padding:6px; }
+  #theme-btn svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .ic-moon { display:none; }
+  :root[data-theme="light"] .ic-sun { display:none; }
+  :root[data-theme="light"] .ic-moon { display:inline; }
   .filter { width:100%; margin-bottom:var(--s3); padding:9px 12px; border-radius:var(--r-sm); border:1px solid var(--line); background:var(--surface); color:var(--ink); font-family:var(--body); font-size:14px; outline:none; transition:border-color .15s; }
   .filter:focus { border-color:var(--clay); }
   .filter::placeholder { color:var(--muted); }
@@ -774,7 +797,13 @@ const HTML = /* html */ `<!doctype html>
   <div class="wrap">
     <header>
       <h1><span class="dot" id="status-dot"></span> Claude Control</h1>
-      <div class="sub" id="status">atualizando…</div>
+      <div class="hdr-right">
+        <span class="sub" id="status">atualizando…</span>
+        <button class="btn btn-ghost btn-icon" id="theme-btn" onclick="toggleTheme()" title="Alternar tema claro/escuro">
+          <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          <svg class="ic-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+        </button>
+      </div>
     </header>
 
     <div class="tabs">
@@ -792,8 +821,8 @@ const HTML = /* html */ `<!doctype html>
         </span>
       </div>
       <div class="srcbar">
-        <button class="src on" id="src-claude" onclick="toggleSource('claude')"><span class="ico"></span> Claude</button>
-        <button class="src" id="src-codex" onclick="toggleSource('codex')"><span class="ico"></span> Codex</button>
+        <button class="src on" id="src-claude" onclick="toggleSource('claude')"><svg class="ico" viewBox="0 0 24 24"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg> Claude</button>
+        <button class="src" id="src-codex" onclick="toggleSource('codex')"><svg class="ico" viewBox="0 0 24 24"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997z"/></svg> Codex</button>
       </div>
       <input class="filter" id="sess-filter" placeholder="filtrar por título ou pasta…" oninput="renderSessions()" />
       <div id="sessions"></div>
@@ -932,16 +961,35 @@ function toggleArchived() {
   renderSessions();
 }
 
-async function rename(id, source, current, autoTitle, btn) {
-  const v = prompt('Renomear sessão (deixe vazio para voltar ao título automático):', current);
-  if (v === null) return; // cancelou
-  const name = v.trim();
+function startRename(btn, id, source) {
+  const wrap = btn.closest('.title-wrap');
+  const s = SESS.find(x => x.id === id && x.source === source);
+  const cur = s ? s.title : wrap.querySelector('.title').textContent;
+  wrap.innerHTML =
+    '<input class="title-edit" /> '
+    + '<button class="btn btn-copy btn-icon" data-act="ok" title="Confirmar"><svg class="ck" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></button>'
+    + '<button class="btn btn-arch btn-icon" data-act="cancel" title="Cancelar"><svg class="ck" viewBox="0 0 24 24"><path d="M6 6l12 12M6 18L18 6"/></svg></button>';
+  const inp = wrap.querySelector('input');
+  inp.value = cur; inp.focus(); inp.select();
+  const ok = () => commitRename(wrap, id, source);
+  wrap.querySelector('[data-act=ok]').onclick = ok;
+  wrap.querySelector('[data-act=cancel]').onclick = () => renderSessions();
+  inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); ok(); } else if (e.key === 'Escape') renderSessions(); };
+}
+async function commitRename(wrap, id, source) {
+  const name = (wrap.querySelector('input.title-edit').value || '').trim();
+  const s = SESS.find(x => x.id === id && x.source === source);
   try {
     await fetch('/api/rename', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ id, source, title: name }) });
-  } catch { return; }
-  const s = SESS.find(x => x.id === id && x.source === source);
-  if (s) { s.title = name || autoTitle; s.renamed = !!name; }
+  } catch { renderSessions(); return; }
+  if (s) { s.title = name || s.autoTitle; s.renamed = !!name; }
   renderSessions();
+}
+
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem('cc-theme', next); } catch {}
 }
 
 async function archive(id, source, flag, btn) {
@@ -977,7 +1025,10 @@ function renderSessions() {
   document.getElementById('sessions').innerHTML = list.length ? list.map(s => \`
     <div class="card\${s.archived ? ' dim' : ''}">
       <div class="main">
-        <div class="title"\${s.renamed ? \` title="auto: \${esc(s.autoTitle)}"\` : ''}>\${esc(s.title)}</div>
+        <div class="title-wrap">
+          <span class="title"\${s.renamed ? \` title="auto: \${esc(s.autoTitle)}"\` : ''}>\${esc(s.title)}</span>
+          <button class="btn btn-edit btn-icon" title="Renomear" onclick='startRename(this, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)})'><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+        </div>
         <div class="meta">
           <span class="chip src-\${s.source}">\${s.source === 'codex' ? 'Codex' : 'Claude'}</span>
           <span class="chip folder" title="\${esc(s.folder)}">\${esc(s.folder)}</span>
@@ -986,7 +1037,6 @@ function renderSessions() {
         </div>
       </div>
       <div class="actions">
-        <button class="btn btn-edit btn-icon" title="Renomear sessão" onclick='rename(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${JSON.stringify(s.title)}, \${JSON.stringify(s.autoTitle)}, this)'><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
         <button class="btn btn-vscode btn-icon" title="Abrir a pasta no VS Code" onclick='openIn(\${JSON.stringify(s.folder)}, this)'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
         <button class="btn btn-copy" onclick='resume(\${JSON.stringify(s.folder)}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'>Retomar</button>
         <button class="btn btn-arch" onclick='archive(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${!s.archived}, this)'>\${s.archived ? 'Desarquivar' : 'Arquivar'}</button>

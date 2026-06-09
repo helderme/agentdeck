@@ -33,6 +33,8 @@ Abre **http://localhost:7799**. Duas abas, abrindo em **Sessões**:
 
 O visual segue o [Impeccable](https://impeccable.style/): paleta quente em OKLCH,
 tipografia Fraunces + Hanken Grotesk + JetBrains Mono, sem gradientes nem glows.
+Tem **tema claro e escuro** (botão sol/lua; segue o sistema por padrão, lembra a
+escolha; `?theme=light|dark` força um). Renomear é **inline** (lápis após o título).
 
 ## Como funciona
 
