@@ -8,9 +8,9 @@
  * Rodar:  bun server.ts   (ou ./start.sh)   →   http://localhost:7799
  */
 import { execSync } from 'node:child_process';
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { homedir, hostname, platform, userInfo } from 'node:os';
+import { dirname, join } from 'node:path';
 
 const PORT = 7799;
 const SNAPSHOT_MARK = '.claude/shell-snapshots';
@@ -331,6 +331,163 @@ const sessions = async (want: Record<Source, boolean>): Promise<Session[]> => {
   return all.sort((a, b) => b.mtime - a.mtime);
 };
 
+// ─── Importar / Exportar sessões ─────────────────────────────────────────
+// Codifica um caminho no nome de pasta que o Claude usa em ~/.claude/projects
+// (cada char fora de [A-Za-z0-9] vira '-'). Ex.: /home/h/efex -> -home-h-efex
+const encodeProject = (p: string): string => p.replace(/[^A-Za-z0-9]/g, '-');
+const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const occurrences = (text: string, sub: string): number => (sub ? text.split(sub).length - 1 : 0);
+
+// Possíveis segredos no conteúdo (pra avisar antes de exportar/compartilhar).
+const SECRET_PATTERNS: [string, RegExp][] = [
+  ['Chave Anthropic', /sk-ant-[A-Za-z0-9_-]{20,}/g],
+  ['Chave OpenAI', /sk-(?:proj-)?[A-Za-z0-9_-]{20,}/g],
+  ['Token GitHub', /gh[pousr]_[A-Za-z0-9]{20,}/g],
+  ['AWS Access Key', /AKIA[0-9A-Z]{16}/g],
+  ['Chave Google', /AIza[0-9A-Za-z_-]{30,}/g],
+  ['Token Slack', /xox[baprs]-[A-Za-z0-9-]{10,}/g],
+  ['JWT', /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g],
+  ['Chave privada', /-----BEGIN (?:RSA |EC |OPENSSH |PGP |DSA )?PRIVATE KEY-----/g],
+];
+const mask = (s: string): string => (s.length <= 10 ? s.slice(0, 3) + '…' : s.slice(0, 6) + '…' + s.slice(-3));
+const scanSecrets = (text: string): { kind: string; count: number; sample: string }[] => {
+  const out: { kind: string; count: number; sample: string }[] = [];
+  for (const [kind, re] of SECRET_PATTERNS) {
+    const m = text.match(re);
+    if (m?.length) out.push({ kind, count: m.length, sample: mask(m[0]) });
+  }
+  return out;
+};
+
+// Apontamentos que o remap automático (home/cwd) não cobre: homes de outros
+// usuários, drives externos, caminhos Windows. São os que pedem decisão manual.
+const foreignPointers = (text: string, oldUser: string): { path: string; count: number }[] => {
+  const found = new Map<string, number>();
+  const scan = (re: RegExp, keep?: (m: string) => boolean) => {
+    for (const m of text.matchAll(re)) {
+      const v = m[0];
+      if (keep && !keep(v)) continue;
+      found.set(v, (found.get(v) ?? 0) + 1);
+    }
+  };
+  scan(/\/home\/[A-Za-z0-9._-]+/g, (v) => v !== '/home/' + oldUser);
+  scan(/\/Users\/[A-Za-z0-9._-]+/g, (v) => v !== '/Users/' + oldUser);
+  scan(/\/(?:mnt|media|srv)\/[A-Za-z0-9._-]+/g);
+  scan(/\/run\/media\/[A-Za-z0-9._-]+/g);
+  scan(/[A-Za-z]:\\[^\s"'<>):;,]+/g);
+  return [...found.entries()].slice(0, 60).map(([path, count]) => ({ path, count }));
+};
+
+// Localiza o arquivo de uma sessão pelo id.
+const locateClaude = (id: string): { path: string; projectDir: string } | null => {
+  let dirs: string[];
+  try {
+    dirs = readdirSync(PROJECTS_DIR);
+  } catch {
+    return null;
+  }
+  for (const d of dirs) {
+    const p = join(PROJECTS_DIR, d, id + '.jsonl');
+    try {
+      if (statSync(p).isFile()) return { path: p, projectDir: d };
+    } catch {
+      /* segue */
+    }
+  }
+  return null;
+};
+const locateCodex = (id: string): { path: string; relPath: string } | null => {
+  let rel: string[];
+  try {
+    rel = readdirSync(CODEX_DIR, { recursive: true }) as string[];
+  } catch {
+    return null;
+  }
+  const hit = rel.find((f) => /rollout-.*\.jsonl$/.test(f) && f.includes(id));
+  return hit ? { path: join(CODEX_DIR, hit), relPath: hit } : null;
+};
+
+// Substitui um caminho só quando ele termina numa fronteira (evita trocar
+// /a/efex dentro de /a/efex-backend).
+const BOUNDARY = '(?=$|[/"\'\\\\\\s:?<>),;])';
+const remapContent = (
+  text: string,
+  pairs: [string | undefined, string | undefined][],
+  manual: Record<string, string>,
+): string => {
+  let out = text;
+  for (const [from, to] of pairs) {
+    if (from && to !== undefined && from !== to) out = out.replace(new RegExp(escRe(from) + BOUNDARY, 'g'), to);
+  }
+  for (const [from, to] of Object.entries(manual)) if (from && to) out = out.split(from).join(to);
+  return out;
+};
+
+type ExportSession = {
+  source: Source;
+  id: string;
+  title: string;
+  cwd: string;
+  projectDir?: string;
+  relPath?: string;
+  version?: string;
+  bytes: number;
+  content: string;
+  secrets: { kind: string; count: number; sample: string }[];
+  foreign: { path: string; count: number }[];
+};
+
+const buildExport = (items: { source: Source; id: string }[], scan: boolean): ExportSession[] => {
+  const me = userInfo().username;
+  const out: ExportSession[] = [];
+  for (const it of items) {
+    const source: Source = it.source === 'codex' ? 'codex' : 'claude';
+    let path: string, projectDir: string | undefined, relPath: string | undefined;
+    if (source === 'claude') {
+      const loc = locateClaude(it.id);
+      if (!loc) continue;
+      path = loc.path;
+      projectDir = loc.projectDir;
+    } else {
+      const loc = locateCodex(it.id);
+      if (!loc) continue;
+      path = loc.path;
+      relPath = loc.relPath;
+    }
+    let content = '';
+    try {
+      content = readFileSync(path, 'utf8');
+    } catch {
+      continue;
+    }
+    let cwd = '', title = '', version: string | undefined;
+    if (source === 'claude') {
+      cwd = content.match(/"cwd":"([^"]*)"/)?.[1] ?? '';
+      const t = [...content.matchAll(/"aiTitle":"([^"]*)"/g)].pop();
+      title = t ? unescapeJson(t[1]) : '(sem título)';
+      version = content.match(/"version":"([^"]*)"/)?.[1];
+    } else {
+      const meta = codexMeta(content.slice(0, 524288));
+      cwd = meta.cwd ?? '';
+      title = meta.title ?? '(sem título)';
+    }
+    out.push({
+      source,
+      id: it.id,
+      title,
+      cwd,
+      projectDir,
+      relPath,
+      version,
+      bytes: content.length,
+      content,
+      secrets: scan ? scanSecrets(content) : [],
+      foreign: foreignPointers(content, me),
+    });
+  }
+  return out;
+};
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
 
@@ -356,6 +513,96 @@ Bun.serve({
       // abre a pasta no VS Code (nova janela; reusa se já estiver aberta). Em bg pra não travar.
       sh(`code ${JSON.stringify(body.folder)} >/dev/null 2>&1 &`);
       return json({ ok: true });
+    }
+
+    if (url.pathname === '/api/export' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as { items?: { source: Source; id: string }[]; scanSecrets?: boolean };
+      const items = Array.isArray(body.items) ? body.items : [];
+      const sessions = buildExport(items, body.scanSecrets !== false);
+      return json({
+        format: 'claude-control/sessions',
+        version: 1,
+        exportedAt: Date.now(),
+        machine: { home: homedir(), user: userInfo().username, host: hostname(), platform: platform() },
+        sessions,
+      });
+    }
+
+    if (url.pathname === '/api/import' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as {
+        mode?: string;
+        bundle?: any;
+        decisions?: Record<string, { newCwd?: string; remaps?: Record<string, string>; overwrite?: boolean }>;
+      };
+      const bundle = body.bundle;
+      if (!bundle || bundle.format !== 'claude-control/sessions' || !Array.isArray(bundle.sessions)) {
+        return json({ ok: false, error: 'arquivo de importação inválido' }, 400);
+      }
+      const newHome = homedir();
+      const newUser = userInfo().username;
+      const oldHome: string = bundle.machine?.home ?? '';
+      const oldUser: string = bundle.machine?.user ?? '';
+      const underHome = (p: string) => oldHome && (p === oldHome || p.startsWith(oldHome + '/'));
+      const suggest = (cwd: string) => (underHome(cwd) ? newHome + cwd.slice(oldHome.length) : cwd);
+
+      if (body.mode === 'apply') {
+        const decisions = body.decisions ?? {};
+        const results = (bundle.sessions as ExportSession[]).map((s) => {
+          const key = s.source + ':' + s.id;
+          const d = decisions[key] ?? {};
+          const newCwd = (d.newCwd || suggest(s.cwd)).trim() || s.cwd;
+          const pairs: [string | undefined, string | undefined][] = [
+            [s.cwd, newCwd],
+            [oldHome, newHome],
+          ];
+          if (s.source === 'claude' && s.projectDir) pairs.push([s.projectDir, encodeProject(newCwd)]);
+          const content = remapContent(s.content, pairs, d.remaps ?? {});
+          const target =
+            s.source === 'claude'
+              ? join(PROJECTS_DIR, encodeProject(newCwd), s.id + '.jsonl')
+              : join(CODEX_DIR, s.relPath ?? `${s.id}.jsonl`);
+          if (existsSync(target) && !d.overwrite) {
+            return { key, id: s.id, source: s.source, skipped: true, reason: 'já existe nesta máquina', target };
+          }
+          try {
+            mkdirSync(dirname(target), { recursive: true });
+            writeFileSync(target, content);
+          } catch (e: any) {
+            return { key, id: s.id, source: s.source, ok: false, error: String(e?.message ?? e) };
+          }
+          const resume =
+            (s.source === 'codex' ? 'codex resume ' : 'claude --resume ') + s.id;
+          return { key, id: s.id, source: s.source, ok: true, target, newCwd, resume: `cd ${JSON.stringify(newCwd)} && ${resume}` };
+        });
+        return json({ ok: true, results });
+      }
+
+      // mode = preview (default): nada é escrito
+      const plan = (bundle.sessions as ExportSession[]).map((s) => {
+        const suggestedCwd = suggest(s.cwd);
+        const projectDir = s.source === 'claude' ? encodeProject(suggestedCwd) : null;
+        const target =
+          s.source === 'claude'
+            ? join(PROJECTS_DIR, projectDir!, s.id + '.jsonl')
+            : join(CODEX_DIR, s.relPath ?? `${s.id}.jsonl`);
+        return {
+          key: s.source + ':' + s.id,
+          source: s.source,
+          id: s.id,
+          title: s.title,
+          version: s.version,
+          oldCwd: s.cwd,
+          suggestedCwd,
+          cwdHits: occurrences(s.content, s.cwd),
+          homeHits: oldHome ? occurrences(s.content, oldHome) : 0,
+          foreign: s.foreign ?? [],
+          secrets: s.secrets ?? [],
+          target,
+          collision: existsSync(target),
+          bytes: s.bytes,
+        };
+      });
+      return json({ ok: true, oldHome, oldUser, newHome, newUser, host: bundle.machine?.host, exportedAt: bundle.exportedAt, plan });
     }
 
     if (url.pathname === '/api/rename' && req.method === 'POST') {
@@ -497,6 +744,27 @@ const HTML = /* html */ `<!doctype html>
   .empty { color:var(--muted); text-align:center; padding:var(--s7) var(--s4); border:1px dashed var(--line); border-radius:var(--r); }
   a.open { color:var(--clay); text-decoration:none; font-size:12px; font-weight:600; }
   a.open:hover { text-decoration:underline; }
+  .hint { color:var(--muted); font-size:13px; line-height:1.6; max-width:72ch; margin:0 0 var(--s3); }
+  .hint b { color:var(--ink); font-weight:600; }
+  .check { display:flex; align-items:center; gap:var(--s2); color:var(--muted); font-size:13px; margin-bottom:var(--s3); cursor:pointer; }
+  .check input { accent-color:var(--clay); width:15px; height:15px; }
+  .filebtn { display:inline-flex; align-items:center; gap:var(--s2); padding:8px 14px; border-radius:var(--r-sm); border:1px solid var(--line); color:var(--ink); font-weight:600; font-size:13px; cursor:pointer; }
+  .filebtn:hover { border-color:var(--muted); background:var(--surface-2); }
+  .filebtn input { display:none; }
+  .xfer { display:flex; align-items:center; gap:var(--s3); }
+  .xfer input[type=checkbox] { accent-color:var(--clay); width:16px; height:16px; flex:none; }
+  .plan-card { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:var(--s4); margin-bottom:var(--s2); }
+  .plan-card .lbl { color:var(--muted); font-size:12px; }
+  .arrow { color:var(--muted); }
+  .mono { font-family:var(--mono); font-size:12px; color:var(--ink); word-break:break-all; }
+  .pathin { width:100%; margin-top:4px; padding:7px 10px; border-radius:var(--r-sm); border:1px solid var(--line); background:var(--bg); color:var(--ink); font-family:var(--mono); font-size:12px; outline:none; }
+  .pathin:focus { border-color:var(--clay); }
+  .warn { border:1px solid color-mix(in oklch, var(--red) 45%, var(--line)); background:var(--red-soft); color:var(--ink); border-radius:var(--r); padding:var(--s3) var(--s4); margin-bottom:var(--s3); font-size:13px; }
+  .warn b { color:var(--red); }
+  .ptr { display:flex; align-items:flex-start; gap:var(--s2); padding:6px 0; border-top:1px solid var(--line); font-size:12.5px; }
+  .ptr:first-of-type { border-top:0; }
+  .ptr .grow { flex:1; min-width:0; }
+  .ok-line { color:var(--green); font-size:13px; }
   .foot { max-width:68ch; margin-top:var(--s6); padding-top:var(--s4); border-top:1px solid var(--line); color:var(--muted); font-size:13px; line-height:1.65; }
   .foot b { color:var(--ink); font-weight:600; }
   code { font-family:var(--mono); background:var(--surface-2); padding:1px 6px; border-radius:5px; color:var(--ink); font-size:12.5px; }
@@ -512,6 +780,7 @@ const HTML = /* html */ `<!doctype html>
     <div class="tabs">
       <button class="tab active" id="tab-sessions" onclick="switchTab('sessions')">Sessões <span class="badge" id="badge-sessions">–</span></button>
       <button class="tab" id="tab-watch" onclick="switchTab('watch')">Processos <span class="badge" id="badge-watch">0</span></button>
+      <button class="tab" id="tab-transfer" onclick="switchTab('transfer')">Transferir</button>
     </div>
 
     <section class="panel active" id="panel-sessions">
@@ -536,6 +805,32 @@ const HTML = /* html */ `<!doctype html>
 
       <h2 class="section-title">Containers Docker</h2>
       <div id="containers"></div>
+    </section>
+
+    <section class="panel" id="panel-transfer">
+      <h2 class="section-title">Exportar</h2>
+      <p class="hint">Empacota sessões num arquivo <code>.json</code> portátil. Os caminhos da máquina
+        (home, pasta do projeto, nome de usuário) ficam registrados pra serem remapeados na importação.
+        Sidecars (subagentes, workflows, file-history) não vão junto: a conversa retoma, esses artefatos não.</p>
+      <input class="filter" id="xfer-filter" placeholder="filtrar sessões para exportar…" oninput="renderXfer()" />
+      <label class="check"><input type="checkbox" id="xfer-scan" checked /> Avisar sobre possíveis segredos antes de baixar</label>
+      <div class="row sess-head">
+        <span class="sub" id="xfer-count">—</span>
+        <span class="actions">
+          <button class="btn btn-ghost" id="xfer-all" onclick="xferToggleAll()">Selecionar todas</button>
+          <button class="btn btn-copy" id="xfer-export" onclick="exportSelected()">Exportar (0)</button>
+        </span>
+      </div>
+      <div id="xfer-warn"></div>
+      <div id="xfer-list"><div class="empty">Carregando sessões…</div></div>
+
+      <h2 class="section-title">Importar</h2>
+      <p class="hint">Carregue um <code>.json</code> exportado. O painel mostra um <b>preview</b> do que vai mudar
+        (home, cwd, pasta codificada) sem escrever nada. Apontamentos que o remap automático não cobre
+        aparecem pra você <b>ignorar</b> ou ajustar. Se preferir resolver com uma IA, copie o prompt no fim.</p>
+      <label class="filebtn">Escolher arquivo .json<input type="file" id="imp-file" accept=".json,application/json" onchange="impPick(event)" /></label>
+      <span class="sub" id="imp-name"></span>
+      <div id="imp-plan"></div>
     </section>
 
     <div class="foot">
@@ -595,11 +890,12 @@ async function refresh() {
 // ── Abas ──
 let sessLoaded = false;
 function switchTab(name) {
-  for (const t of ['watch', 'sessions']) {
+  for (const t of ['watch', 'sessions', 'transfer']) {
     document.getElementById('tab-' + t).classList.toggle('active', t === name);
     document.getElementById('panel-' + t).classList.toggle('active', t === name);
   }
   if (name === 'sessions' && !sessLoaded) loadSessions(); // só escaneia ao abrir a 1ª vez
+  if (name === 'transfer' && !xferLoaded) loadXfer();
 }
 
 // ── Sessões (carregadas sob demanda, não no loop de 2,5s) ──
@@ -713,10 +1009,170 @@ function resume(folder, id, source, btn) {
   });
 }
 
+// ── Transferir: exportar ──
+let xferLoaded = false, XFER = [], xferSel = new Set();
+const encProj = (p) => p.replace(/[^A-Za-z0-9]/g, '-');
+const xferKey = (s) => s.source + ':' + s.id;
+
+async function loadXfer() {
+  xferLoaded = true;
+  const box = document.getElementById('xfer-list');
+  box.innerHTML = '<div class="empty">Carregando sessões…</div>';
+  try { XFER = (await (await fetch('/api/sessions?sources=claude,codex')).json()).sessions || []; }
+  catch { box.innerHTML = '<div class="empty">Falha ao ler sessões.</div>'; return; }
+  renderXfer();
+}
+
+function xferFiltered() {
+  const q = (document.getElementById('xfer-filter').value || '').toLowerCase();
+  return XFER.filter(s => !q || s.title.toLowerCase().includes(q) || s.folder.toLowerCase().includes(q));
+}
+function renderXfer() {
+  const list = xferFiltered();
+  document.getElementById('xfer-count').textContent = xferSel.size + ' selecionada(s) · ' + list.length + ' na lista';
+  const exp = document.getElementById('xfer-export');
+  exp.textContent = 'Exportar (' + xferSel.size + ')'; exp.disabled = xferSel.size === 0;
+  document.getElementById('xfer-list').innerHTML = list.length ? list.map(s => {
+    const k = xferKey(s);
+    return \`<div class="card"><div class="xfer">
+      <input type="checkbox" \${xferSel.has(k) ? 'checked' : ''} onchange="xferPick(\${JSON.stringify(k)}, this.checked)" />
+      <div class="main">
+        <div class="title">\${esc(s.title)}</div>
+        <div class="meta">
+          <span class="chip src-\${s.source}">\${s.source === 'codex' ? 'Codex' : 'Claude'}</span>
+          <span class="chip folder">\${esc(s.folder)}</span>
+        </div>
+      </div></div></div>\`;
+  }).join('') : '<div class="empty">Nenhuma sessão.</div>';
+}
+function xferPick(k, on) { if (on) xferSel.add(k); else xferSel.delete(k); renderXfer(); }
+function xferToggleAll() {
+  const list = xferFiltered(), allOn = list.length && list.every(s => xferSel.has(xferKey(s)));
+  for (const s of list) { const k = xferKey(s); if (allOn) xferSel.delete(k); else xferSel.add(k); }
+  renderXfer();
+}
+
+let pendingBundle = null;
+async function exportSelected() {
+  const items = XFER.filter(s => xferSel.has(xferKey(s))).map(s => ({ source: s.source, id: s.id }));
+  if (!items.length) return;
+  const btn = document.getElementById('xfer-export'), old = btn.textContent; btn.disabled = true; btn.textContent = 'gerando…';
+  let bundle;
+  try { bundle = await (await fetch('/api/export', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ items, scanSecrets: document.getElementById('xfer-scan').checked }) })).json(); }
+  catch { btn.textContent = old; btn.disabled = false; return; }
+  btn.textContent = old; btn.disabled = false;
+  const warn = document.getElementById('xfer-warn');
+  const withSecrets = (bundle.sessions || []).filter(s => (s.secrets || []).length);
+  if (document.getElementById('xfer-scan').checked && withSecrets.length) {
+    pendingBundle = bundle;
+    warn.innerHTML = '<div class="warn"><b>Atenção:</b> possíveis segredos em ' + withSecrets.length + ' sessão(ões) — '
+      + esc(withSecrets.map(s => (s.secrets || []).map(x => x.kind + ' ×' + x.count).join(', ')).join(' · '))
+      + '. Revise antes de compartilhar. <div style="margin-top:8px"><button class="btn btn-copy" onclick="downloadPending()">Baixar mesmo assim</button></div></div>';
+  } else { warn.innerHTML = ''; downloadBundle(bundle); }
+}
+function downloadPending() { if (pendingBundle) { downloadBundle(pendingBundle); document.getElementById('xfer-warn').innerHTML = ''; pendingBundle = null; } }
+function downloadBundle(bundle) {
+  const n = (bundle.sessions || []).length;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(bundle)], { type: 'application/json' }));
+  a.download = 'claude-control-' + n + 'sessoes-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ── Transferir: importar ──
+let impBundle = null, impPlan = null;
+async function impPick(ev) {
+  const file = ev.target.files && ev.target.files[0]; if (!file) return;
+  document.getElementById('imp-name').textContent = file.name;
+  const plan = document.getElementById('imp-plan');
+  let bundle;
+  try { bundle = JSON.parse(await file.text()); }
+  catch { plan.innerHTML = '<div class="warn"><b>Erro:</b> arquivo não é JSON válido.</div>'; return; }
+  impBundle = bundle;
+  let resp;
+  try { resp = await (await fetch('/api/import', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ mode:'preview', bundle }) })).json(); }
+  catch { plan.innerHTML = '<div class="warn">Falha ao analisar.</div>'; return; }
+  if (!resp.ok) { plan.innerHTML = '<div class="warn"><b>Erro:</b> ' + esc(resp.error || 'bundle inválido') + '</div>'; return; }
+  impPlan = resp; renderPlan();
+}
+function renderPlan() {
+  const r = impPlan;
+  const head = '<div class="hint" style="margin-top:8px">Origem: <span class="mono">' + esc(r.oldHome || '?') + '</span> (' + esc(r.oldUser || '?')
+    + (r.host ? '@' + esc(r.host) : '') + ') <span class="arrow">→</span> esta máquina: <span class="mono">' + esc(r.newHome) + '</span> (' + esc(r.newUser) + ')</div>';
+  const cards = r.plan.map((p, i) => {
+    const collision = p.collision ? '<label class="check" style="margin:8px 0 0"><input type="checkbox" id="imp-ow-' + i + '" /> Sobrescrever (já existe nesta máquina)</label>' : '';
+    const secrets = (p.secrets || []).length ? '<div class="warn" style="margin-top:8px"><b>Segredos:</b> ' + esc(p.secrets.map(x => x.kind + ' ×' + x.count).join(', ')) + '</div>' : '';
+    const foreign = (p.foreign || []).length
+      ? '<div class="lbl" style="margin-top:10px">Apontamentos fora da home (marcado = ignora; desmarque para substituir):</div>'
+        + p.foreign.map((f, j) => '<div class="ptr"><input type="checkbox" id="imp-ig-' + i + '-' + j + '" checked onchange="document.getElementById(\\'imp-rp-' + i + '-' + j + '\\').disabled=this.checked" />'
+          + '<div class="grow"><span class="mono">' + esc(f.path) + '</span> <span class="lbl">×' + f.count + '</span>'
+          + '<input class="pathin" id="imp-rp-' + i + '-' + j + '" data-from="' + esc(f.path) + '" placeholder="substituir por…" disabled /></div></div>').join('')
+      : '<div class="lbl" style="margin-top:10px">Sem apontamentos fora da home — o remap automático cobre tudo.</div>';
+    return '<div class="plan-card"><div class="row"><div class="title">' + esc(p.title) + '</div><span class="chip src-' + p.source + '">' + (p.source === 'codex' ? 'Codex' : 'Claude') + '</span></div>'
+      + '<div class="lbl" style="margin-top:8px">Pasta de destino (cwd nesta máquina):</div>'
+      + '<input class="pathin" id="imp-cwd-' + i + '" value="' + esc(p.suggestedCwd || p.oldCwd || '') + '" oninput="updTarget(' + i + ')" />'
+      + '<div class="lbl" style="margin-top:8px">Vai escrever em: <span class="mono" id="imp-tgt-' + i + '">' + esc(p.target) + '</span></div>'
+      + '<div class="lbl" style="margin-top:6px">' + p.homeHits + ' caminho(s) sob a home e ' + p.cwdHits + ' no cwd serão reescritos.</div>'
+      + collision + secrets + foreign + '</div>';
+  }).join('');
+  document.getElementById('imp-plan').innerHTML = head + cards
+    + '<div class="actions" style="margin-top:12px"><button class="btn btn-copy" onclick="applyImport()">Aplicar importação</button>'
+    + '<button class="btn btn-ghost" onclick="copyAiPrompt(this)">Copiar prompt pra IA</button></div>';
+}
+function updTarget(i) {
+  const p = impPlan.plan[i];
+  if (p.source !== 'claude') return; // Codex: caminho do arquivo não depende do cwd
+  const cwd = document.getElementById('imp-cwd-' + i).value || '';
+  document.getElementById('imp-tgt-' + i).textContent = impPlan.newHome + '/.claude/projects/' + encProj(cwd) + '/' + p.id + '.jsonl';
+}
+async function applyImport() {
+  const decisions = {};
+  impPlan.plan.forEach((p, i) => {
+    const ow = document.getElementById('imp-ow-' + i);
+    const d = { newCwd: document.getElementById('imp-cwd-' + i).value, remaps: {}, overwrite: !!(ow && ow.checked) };
+    (p.foreign || []).forEach((f, j) => {
+      const ig = document.getElementById('imp-ig-' + i + '-' + j), rp = document.getElementById('imp-rp-' + i + '-' + j);
+      if (ig && !ig.checked && rp && rp.value.trim()) d.remaps[rp.dataset.from] = rp.value.trim();
+    });
+    decisions[p.key] = d;
+  });
+  let resp;
+  try { resp = await (await fetch('/api/import', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ mode:'apply', bundle: impBundle, decisions }) })).json(); }
+  catch { return; }
+  const items = (resp.results || []).map(x => x.ok
+    ? '<div class="ok-line">✓ importada: <span class="mono">' + esc(x.target) + '</span><br><span class="lbl">retomar:</span> <span class="mono">' + esc(x.resume) + '</span></div>'
+    : x.skipped ? '<div class="lbl">— pulada (' + esc(x.reason) + '): ' + esc(x.id) + '</div>'
+    : '<div class="warn">erro em ' + esc(x.id) + ': ' + esc(x.error || '') + '</div>').join('<div style="height:8px"></div>');
+  document.getElementById('imp-plan').innerHTML = '<div class="plan-card"><div class="title">Resultado</div><div style="margin-top:10px">' + (items || 'nada') + '</div></div>';
+}
+function copyAiPrompt(btn) {
+  const r = impPlan, L = [];
+  L.push('Preciso adaptar sessões de IA (Claude Code / Codex) exportadas de outra máquina para rodarem nesta. Vou anexar o arquivo .json exportado.');
+  L.push('');
+  L.push('Origem: home=' + r.oldHome + ' usuário=' + r.oldUser + (r.host ? ' host=' + r.host : ''));
+  L.push('Esta máquina: home=' + r.newHome + ' usuário=' + r.newUser);
+  L.push('');
+  L.push('Para cada sessão, reescreva o "content" (texto JSONL):');
+  r.plan.forEach(p => {
+    L.push('- [' + p.source + '] ' + p.title + ' (id ' + p.id + ')');
+    L.push('    cwd: ' + p.oldCwd + '  ->  ' + (p.suggestedCwd || '<defina>'));
+    L.push('    troque o prefixo da home ' + r.oldHome + ' por ' + r.newHome + ' em todos os caminhos');
+    if (p.source === 'claude') L.push('    troque o nome de pasta codificado (cada char fora de [A-Za-z0-9] vira "-") do cwd antigo pelo do novo');
+    if ((p.foreign || []).length) {
+      L.push('    apontamentos fora da home (pergunte antes de mudar; posso querer ignorar):');
+      p.foreign.forEach(f => L.push('      • ' + f.path + ' (×' + f.count + ')'));
+    }
+  });
+  L.push('');
+  L.push('Regra: quando não souber para onde apontar um caminho, NÃO adivinhe — me pergunte e me dê a opção de ignorar (deixar como está). Grave cada sessão Claude em ~/.claude/projects/<pasta-codificada-do-novo-cwd>/<id>.jsonl e cada Codex em ~/.codex/sessions/<caminho-original-do-bundle>.');
+  navigator.clipboard.writeText(L.join('\\n')).then(() => { const o = btn.textContent; btn.textContent = 'copiado ✓'; setTimeout(() => { btn.textContent = o; }, 1400); });
+}
+
 refresh();
 setInterval(refresh, 2500);
-// aba padrão é Sessões; #watch abre direto em Processos
-if (location.hash === '#watch') switchTab('watch');
+// aba padrão é Sessões; #watch / #transfer abrem direto na respectiva aba
+const startHash = location.hash.slice(1);
+if (startHash === 'watch' || startHash === 'transfer') switchTab(startHash);
 else loadSessions();
 </script>
 </body>
