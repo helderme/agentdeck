@@ -1,8 +1,8 @@
-# Claude Terminal Control
+# Claude Control
 
-Painel local pra **ver e finalizar** o que o Claude Code (VSCode) deixou rodando
-em background (dev servers, etc.) + containers Docker. Visual renderizado, sem
-precisar caçar PID na mão.
+Painel local pra **listar as sessões** do Claude Code e do Codex (com pasta e
+título) e **ver/finalizar** o que ficou rodando em background (dev servers,
+containers Docker). Visual renderizado, sem precisar caçar PID na mão.
 
 ## Rodar
 
@@ -11,14 +11,7 @@ cd "$HOME/Área de trabalho/claude-terminal-control"
 bun server.ts        # ou: ./start.sh   (abre o navegador sozinho)
 ```
 
-Abre **http://localhost:7799**. Duas abas:
-
-**Acompanhar** (atualiza sozinho a cada 2,5s):
-
-- **Processos do Claude** — tudo que foi iniciado via Claude (detectado pela
-  assinatura `.claude/shell-snapshots`), com PID, uptime e porta. **Finalizar**
-  mata o processo e seus filhos (SIGTERM).
-- **Containers Docker** — lista os ativos (ex.: `efex-tur-ddb-local`) com botão **Parar**.
+Abre **http://localhost:7799**. Duas abas, abrindo em **Sessões**:
 
 **Sessões** (lidas sob demanda; clique em **Atualizar** para reescanear):
 
@@ -30,6 +23,13 @@ Abre **http://localhost:7799**. Duas abas:
   preservado e volta se você limpar o nome); o ícone do **VS Code** abre a pasta;
   **Retomar** copia `claude --resume` ou `codex resume`; **Arquivar** tira a sessão
   da lista sem apagar nada (`~/.claude/.terminal-control-archived.json`).
+
+**Processos** (atualiza sozinho a cada 2,5s):
+
+- **Processos do Claude** — tudo que foi iniciado via Claude (detectado pela
+  assinatura `.claude/shell-snapshots`), com PID, uptime e porta. **Finalizar**
+  mata o processo e seus filhos (SIGTERM).
+- **Containers Docker** — lista os ativos (ex.: `efex-tur-ddb-local`) com botão **Parar**.
 
 O visual segue o [Impeccable](https://impeccable.style/): paleta quente em OKLCH,
 tipografia Fraunces + Hanken Grotesk + JetBrains Mono, sem gradientes nem glows.

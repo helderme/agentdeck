@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 /**
- * Claude Terminal Control — painel local pra ver/finalizar o que o Claude Code
- * (VSCode) deixou rodando em background. Serve o HTML + uma API que lê
- * ps/ss/docker e mata processos. Tudo em 127.0.0.1 — nada exposto pra fora.
+ * Claude Control — painel local pra ver/finalizar o que o Claude Code
+ * (VSCode) deixou rodando em background e listar as sessões do Claude/Codex.
+ * Serve o HTML + uma API que lê ps/ss/docker e ~/.claude e ~/.codex.
+ * Tudo em 127.0.0.1 — nada exposto pra fora.
  *
  * Rodar:  bun server.ts   (ou ./start.sh)   →   http://localhost:7799
  */
@@ -398,14 +399,14 @@ Bun.serve({
   },
 });
 
-console.log(`\n  Claude Terminal Control → http://localhost:${PORT}\n  (Ctrl+C pra parar este painel — não afeta os processos do Claude)\n`);
+console.log(`\n  Claude Control → http://localhost:${PORT}\n  (Ctrl+C pra parar este painel — não afeta os processos do Claude)\n`);
 
 const HTML = /* html */ `<!doctype html>
 <html lang="pt-br">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Claude Terminal Control</title>
+<title>Claude Control</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -504,24 +505,16 @@ const HTML = /* html */ `<!doctype html>
 <body>
   <div class="wrap">
     <header>
-      <h1><span class="dot" id="status-dot"></span> Claude Terminal Control</h1>
+      <h1><span class="dot" id="status-dot"></span> Claude Control</h1>
       <div class="sub" id="status">atualizando…</div>
     </header>
 
     <div class="tabs">
-      <button class="tab active" id="tab-watch" onclick="switchTab('watch')">Acompanhar <span class="badge" id="badge-watch">0</span></button>
-      <button class="tab" id="tab-sessions" onclick="switchTab('sessions')">Sessões <span class="badge" id="badge-sessions">–</span></button>
+      <button class="tab active" id="tab-sessions" onclick="switchTab('sessions')">Sessões <span class="badge" id="badge-sessions">–</span></button>
+      <button class="tab" id="tab-watch" onclick="switchTab('watch')">Processos <span class="badge" id="badge-watch">0</span></button>
     </div>
 
-    <section class="panel active" id="panel-watch">
-      <h2 class="section-title">Processos do Claude em background</h2>
-      <div id="tasks"></div>
-
-      <h2 class="section-title">Containers Docker</h2>
-      <div id="containers"></div>
-    </section>
-
-    <section class="panel" id="panel-sessions">
+    <section class="panel active" id="panel-sessions">
       <div class="row sess-head">
         <h2 class="section-title">Sessões <span class="sub" id="sess-count"></span></h2>
         <span class="actions">
@@ -535,6 +528,14 @@ const HTML = /* html */ `<!doctype html>
       </div>
       <input class="filter" id="sess-filter" placeholder="filtrar por título ou pasta…" oninput="renderSessions()" />
       <div id="sessions"></div>
+    </section>
+
+    <section class="panel" id="panel-watch">
+      <h2 class="section-title">Processos do Claude em background</h2>
+      <div id="tasks"></div>
+
+      <h2 class="section-title">Containers Docker</h2>
+      <div id="containers"></div>
     </section>
 
     <div class="foot">
@@ -714,7 +715,9 @@ function resume(folder, id, source, btn) {
 
 refresh();
 setInterval(refresh, 2500);
-if (location.hash === '#sessions') switchTab('sessions');
+// aba padrão é Sessões; #watch abre direto em Processos
+if (location.hash === '#watch') switchTab('watch');
+else loadSessions();
 </script>
 </body>
 </html>`;
