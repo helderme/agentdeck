@@ -18,6 +18,8 @@ Abre **http://localhost:7799**. Duas abas, abrindo em **Sessões**:
 - Lista as sessões do **Claude** (`~/.claude/projects`) e do **Codex**
   (`~/.codex/sessions`), com a **pasta** onde cada uma roda e um **título** do
   que se trata. As fontes ligam/desligam pelos botões Claude/Codex (começa só Claude).
+- A **estrela** (★) favorita e o **pino** (📌) fixa a sessão no topo da lista
+  (filtro "Favoritas" no cabeçalho; estado em `~/.claude/.terminal-control-flags.json`).
 - Filtro por título ou pasta; o ícone de **lápis** renomeia a sessão (título
   customizado em `~/.claude/.terminal-control-names.json`; o automático fica
   preservado e volta se você limpar o nome); o ícone do **VS Code** abre a pasta;
