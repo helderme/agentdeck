@@ -25,9 +25,11 @@ Abre **http://localhost:7799**. Duas abas:
 - Lista as sessões do **Claude** (`~/.claude/projects`) e do **Codex**
   (`~/.codex/sessions`), com a **pasta** onde cada uma roda e um **título** do
   que se trata. As fontes ligam/desligam pelos botões Claude/Codex (começa só Claude).
-- Filtro por título ou pasta; o ícone do **VS Code** abre a pasta da sessão;
+- Filtro por título ou pasta; o ícone de **lápis** renomeia a sessão (título
+  customizado em `~/.claude/.terminal-control-names.json`; o automático fica
+  preservado e volta se você limpar o nome); o ícone do **VS Code** abre a pasta;
   **Retomar** copia `claude --resume` ou `codex resume`; **Arquivar** tira a sessão
-  da lista sem apagar nada (guardado em `~/.claude/.terminal-control-archived.json`).
+  da lista sem apagar nada (`~/.claude/.terminal-control-archived.json`).
 
 O visual segue o [Impeccable](https://impeccable.style/): paleta quente em OKLCH,
 tipografia Fraunces + Hanken Grotesk + JetBrains Mono, sem gradientes nem glows.
@@ -43,6 +45,7 @@ Então tem um mini-servidor Bun (`server.ts`) que:
   com fallback pro 1º prompt. No Codex (`rollout-*.jsonl`), pasta vem do `session_meta`
   e o título do 1º texto do usuário. Ordena da mais recente pra mais antiga.
 - `POST /api/open` → `code "<pasta>"`, abre a pasta da sessão no VS Code.
+- `POST /api/rename` → grava/remove o nome customizado (chave `fonte:id`).
 - `POST /api/archive` → grava/remove a chave `fonte:id` no arquivo de arquivados.
 - `POST /api/kill` → `kill` (árvore de processos), `fuser -k <porta>` ou `docker stop`.
 
