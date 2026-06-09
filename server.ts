@@ -18,6 +18,7 @@ const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 const CODEX_DIR = join(homedir(), '.codex', 'sessions');
 const ARCHIVE_FILE = join(homedir(), '.claude', '.terminal-control-archived.json');
 const NAMES_FILE = join(homedir(), '.claude', '.terminal-control-names.json');
+const FLAGS_FILE = join(homedir(), '.claude', '.terminal-control-flags.json');
 
 const sh = (cmd: string): string => {
   try {
@@ -142,7 +143,27 @@ type Session = {
   folder: string;
   mtime: number;
   archived: boolean;
+  fav: boolean;
+  pinned: boolean;
   source: Source;
+};
+
+// favoritas (★) e fixadas no topo (📌), guardadas juntas
+type Flags = { fav: Set<string>; pin: Set<string> };
+const readFlags = (): Flags => {
+  try {
+    const o = JSON.parse(readFileSync(FLAGS_FILE, 'utf8'));
+    return { fav: new Set(Array.isArray(o?.favorites) ? o.favorites : []), pin: new Set(Array.isArray(o?.pinned) ? o.pinned : []) };
+  } catch {
+    return { fav: new Set(), pin: new Set() };
+  }
+};
+const writeFlags = (f: Flags): void => {
+  try {
+    writeFileSync(FLAGS_FILE, JSON.stringify({ favorites: [...f.fav], pinned: [...f.pin] }, null, 2));
+  } catch {
+    /* sem permissão — ignora */
+  }
 };
 
 // chave (id pode coincidir entre ferramentas → prefixamos a fonte)
@@ -196,7 +217,7 @@ const unescapeJson = (s: string): string => {
 };
 
 // ─── Claude Code: ~/.claude/projects/<pasta>/<uuid>.jsonl ────────────────
-const claudeSessions = (archived: Set<string>, names: Record<string, string>): Session[] => {
+const claudeSessions = (archived: Set<string>, names: Record<string, string>, flags: Flags): Session[] => {
   let dirs: string[];
   try {
     dirs = readdirSync(PROJECTS_DIR);
@@ -253,7 +274,7 @@ const claudeSessions = (archived: Set<string>, names: Record<string, string>): S
         : '(sem título)';
     const key = archKey('claude', f.id);
     const custom = names[key];
-    return { id: f.id, title: custom ?? autoTitle, autoTitle, renamed: custom != null, folder, mtime: f.mtime, archived: archived.has(key), source: 'claude' };
+    return { id: f.id, title: custom ?? autoTitle, autoTitle, renamed: custom != null, folder, mtime: f.mtime, archived: archived.has(key), fav: flags.fav.has(key), pinned: flags.pin.has(key), source: 'claude' };
   });
 };
 
@@ -285,7 +306,7 @@ const codexMeta = (head: string): { cwd?: string; title?: string } => {
   return { cwd, title };
 };
 
-const codexSessions = async (archived: Set<string>, names: Record<string, string>): Promise<Session[]> => {
+const codexSessions = async (archived: Set<string>, names: Record<string, string>, flags: Flags): Promise<Session[]> => {
   let rel: string[];
   try {
     rel = readdirSync(CODEX_DIR, { recursive: true }) as string[];
@@ -316,7 +337,7 @@ const codexSessions = async (archived: Set<string>, names: Record<string, string
       const autoTitle = title || '(sem título)';
       const key = archKey('codex', id);
       const custom = names[key];
-      return { id, title: custom ?? autoTitle, autoTitle, renamed: custom != null, folder: cwd ?? '—', mtime, archived: archived.has(key), source: 'codex' };
+      return { id, title: custom ?? autoTitle, autoTitle, renamed: custom != null, folder: cwd ?? '—', mtime, archived: archived.has(key), fav: flags.fav.has(key), pinned: flags.pin.has(key), source: 'codex' };
     }),
   );
   return out.filter((s): s is Session => s !== null);
@@ -325,9 +346,10 @@ const codexSessions = async (archived: Set<string>, names: Record<string, string
 const sessions = async (want: Record<Source, boolean>): Promise<Session[]> => {
   const archived = readArchived();
   const names = readNames();
+  const flags = readFlags();
   const all: Session[] = [];
-  if (want.claude) all.push(...claudeSessions(archived, names));
-  if (want.codex) all.push(...(await codexSessions(archived, names)));
+  if (want.claude) all.push(...claudeSessions(archived, names, flags));
+  if (want.codex) all.push(...(await codexSessions(archived, names, flags)));
   return all.sort((a, b) => b.mtime - a.mtime);
 };
 
@@ -605,6 +627,18 @@ Bun.serve({
       return json({ ok: true, oldHome, oldUser, newHome, newUser, host: bundle.machine?.host, exportedAt: bundle.exportedAt, plan });
     }
 
+    if (url.pathname === '/api/flag' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as { id?: string; source?: Source; flag?: string; on?: boolean };
+      if (!body.id || (body.flag !== 'fav' && body.flag !== 'pin')) return json({ ok: false, error: 'id e flag (fav|pin) requeridos' }, 400);
+      const flags = readFlags();
+      const set = body.flag === 'fav' ? flags.fav : flags.pin;
+      const key = archKey(body.source === 'codex' ? 'codex' : 'claude', body.id);
+      if (body.on) set.add(key);
+      else set.delete(key);
+      writeFlags(flags);
+      return json({ ok: true });
+    }
+
     if (url.pathname === '/api/rename' && req.method === 'POST') {
       const body = (await req.json().catch(() => ({}))) as { id?: string; source?: Source; title?: string };
       if (!body.id) return json({ ok: false, error: 'id requerido' }, 400);
@@ -737,6 +771,11 @@ const HTML = /* html */ `<!doctype html>
   .btn-edit { background:transparent; color:var(--muted); border-color:var(--line); }
   .btn-edit:hover { color:var(--ink); border-color:var(--muted); background:var(--surface-2); }
   .btn-edit svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .btn-fav, .btn-pin { background:transparent; color:var(--muted); border-color:transparent; }
+  .btn-fav:hover, .btn-pin:hover { color:var(--ink); background:var(--surface-2); }
+  .btn-fav.on, .btn-pin.on { color:var(--clay); }
+  .btn-fav svg, .btn-pin svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .btn-fav.on svg, .btn-pin.on svg { fill:currentColor; }
   .actions { display:flex; gap:var(--s2); flex-shrink:0; }
   .card.dim { opacity:.55; }
   .card.dim:hover { opacity:1; }
@@ -816,6 +855,7 @@ const HTML = /* html */ `<!doctype html>
       <div class="row sess-head">
         <h2 class="section-title">Sessões <span class="sub" id="sess-count"></span></h2>
         <span class="actions">
+          <button class="btn btn-ghost" id="sess-fav-toggle" onclick="toggleFav()">Favoritas (0)</button>
           <button class="btn btn-ghost" id="sess-archived-toggle" onclick="toggleArchived()">Arquivadas (0)</button>
           <button class="btn btn-ghost" id="sess-reload" onclick="loadSessions()">Atualizar</button>
         </span>
@@ -930,6 +970,7 @@ function switchTab(name) {
 // ── Sessões (carregadas sob demanda, não no loop de 2,5s) ──
 let SESS = [];
 let showArchived = false;
+let showFav = false;
 let sources = { claude: true, codex: false }; // default: só Claude
 const fmtAgo = (ms) => { const s = Math.floor((Date.now() - ms) / 1000);
   const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
@@ -958,6 +999,15 @@ async function loadSessions() {
 function toggleArchived() {
   showArchived = !showArchived;
   document.getElementById('sess-filter').value = ''; // limpa o filtro ao trocar de visão
+  renderSessions();
+}
+function toggleFav() { showFav = !showFav; renderSessions(); }
+
+async function flag(id, source, which, on, btn) {
+  try { await fetch('/api/flag', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ id, source, flag: which, on }) }); }
+  catch { return; }
+  const s = SESS.find(x => x.id === id && x.source === source);
+  if (s) { if (which === 'fav') s.fav = on; else s.pinned = on; }
   renderSessions();
 }
 
@@ -1006,18 +1056,25 @@ function renderSessions() {
   const q = (document.getElementById('sess-filter').value || '').toLowerCase();
   const archivedCount = SESS.filter(s => s.archived).length;
   const activeCount = SESS.length - archivedCount;
-  const base = SESS.filter(s => showArchived ? s.archived : !s.archived);
-  const list = base.filter(s => !q || s.title.toLowerCase().includes(q) || s.folder.toLowerCase().includes(q));
+  const favCount = SESS.filter(s => s.fav && !s.archived).length;
+  let base = SESS.filter(s => showArchived ? s.archived : !s.archived);
+  if (showFav) base = base.filter(s => s.fav);
+  const list = base.filter(s => !q || s.title.toLowerCase().includes(q) || s.folder.toLowerCase().includes(q))
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); // fixadas no topo (mantém ordem por recência dentro de cada grupo)
 
   document.getElementById('sess-count').textContent =
-    base.length ? '· ' + list.length + '/' + base.length + (showArchived ? ' arquivadas' : '') : '';
+    base.length ? '· ' + list.length + '/' + base.length + (showArchived ? ' arquivadas' : showFav ? ' favoritas' : '') : '';
   document.getElementById('badge-sessions').textContent = activeCount;
   const tgl = document.getElementById('sess-archived-toggle');
   tgl.textContent = showArchived ? '← Ver ativas' : 'Arquivadas (' + archivedCount + ')';
   tgl.classList.toggle('on', showArchived);
+  const ftg = document.getElementById('sess-fav-toggle');
+  ftg.textContent = 'Favoritas (' + favCount + ')';
+  ftg.classList.toggle('on', showFav);
 
   const noSource = !sources.claude && !sources.codex;
   const emptyMsg = noSource ? 'Selecione Claude e/ou Codex acima.'
+    : showFav ? 'Nenhuma sessão favoritada.'
     : showArchived ? 'Nenhuma sessão arquivada.'
     : q ? 'Nenhuma sessão bate com o filtro.'
     : SESS.length ? 'Nenhuma sessão ativa — veja as arquivadas.' : 'Nenhuma sessão encontrada.';
@@ -1037,6 +1094,8 @@ function renderSessions() {
         </div>
       </div>
       <div class="actions">
+        <button class="btn btn-icon btn-fav\${s.fav ? ' on' : ''}" title="\${s.fav ? 'Desfavoritar' : 'Favoritar'}" onclick='flag(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, "fav", \${!s.fav}, this)'><svg viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></button>
+        <button class="btn btn-icon btn-pin\${s.pinned ? ' on' : ''}" title="\${s.pinned ? 'Desafixar' : 'Fixar no topo'}" onclick='flag(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, "pin", \${!s.pinned}, this)'><svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></button>
         <button class="btn btn-vscode btn-icon" title="Abrir a pasta no VS Code" onclick='openIn(\${JSON.stringify(s.folder)}, this)'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
         <button class="btn btn-copy" onclick='resume(\${JSON.stringify(s.folder)}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'>Retomar</button>
         <button class="btn btn-arch" onclick='archive(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${!s.archived}, this)'>\${s.archived ? 'Desarquivar' : 'Arquivar'}</button>
