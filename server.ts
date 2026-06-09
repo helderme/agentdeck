@@ -16,6 +16,7 @@ const SNAPSHOT_MARK = '.claude/shell-snapshots';
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 const CODEX_DIR = join(homedir(), '.codex', 'sessions');
 const ARCHIVE_FILE = join(homedir(), '.claude', '.terminal-control-archived.json');
+const NAMES_FILE = join(homedir(), '.claude', '.terminal-control-names.json');
 
 const sh = (cmd: string): string => {
   try {
@@ -132,10 +133,36 @@ const killTree = (pid: number): { ok: boolean; killed: number[] } => {
 // Os .jsonl aninhados em <uuid>/subagents/ são subagentes — ficam de fora,
 // pois só varremos o primeiro nível de cada pasta de projeto.
 type Source = 'claude' | 'codex';
-type Session = { id: string; title: string; folder: string; mtime: number; archived: boolean; source: Source };
+type Session = {
+  id: string;
+  title: string; // título exibido (nome customizado, se houver, senão o detectado)
+  autoTitle: string; // título detectado automaticamente (pra poder reverter)
+  renamed: boolean;
+  folder: string;
+  mtime: number;
+  archived: boolean;
+  source: Source;
+};
 
-// chave de arquivamento (id pode coincidir entre ferramentas → prefixamos a fonte)
+// chave (id pode coincidir entre ferramentas → prefixamos a fonte)
 const archKey = (source: Source, id: string): string => `${source}:${id}`;
+
+// nomes customizados pelo usuário: { "fonte:id": "título" }
+const readNames = (): Record<string, string> => {
+  try {
+    const o = JSON.parse(readFileSync(NAMES_FILE, 'utf8'));
+    return o && typeof o === 'object' ? o : {};
+  } catch {
+    return {};
+  }
+};
+const writeNames = (names: Record<string, string>): void => {
+  try {
+    writeFileSync(NAMES_FILE, JSON.stringify(names, null, 2));
+  } catch {
+    /* sem permissão de escrita — ignora */
+  }
+};
 
 // IDs arquivados pelo usuário (só pra organizar a visão — não toca nos .jsonl)
 const readArchived = (): Set<string> => {
@@ -168,7 +195,7 @@ const unescapeJson = (s: string): string => {
 };
 
 // ─── Claude Code: ~/.claude/projects/<pasta>/<uuid>.jsonl ────────────────
-const claudeSessions = (archived: Set<string>): Session[] => {
+const claudeSessions = (archived: Set<string>, names: Record<string, string>): Session[] => {
   let dirs: string[];
   try {
     dirs = readdirSync(PROJECTS_DIR);
@@ -218,12 +245,14 @@ const claudeSessions = (archived: Set<string>): Session[] => {
     const folder = cwds.get(f.path) ?? decodeDir(f.dir);
     const ai = titles.get(f.path);
     const first = prompts.get(f.path);
-    const title = ai
+    const autoTitle = ai
       ? unescapeJson(ai)
       : first
         ? unescapeJson(first).slice(0, 90).trim() || '(sem título)'
         : '(sem título)';
-    return { id: f.id, title, folder, mtime: f.mtime, archived: archived.has(archKey('claude', f.id)), source: 'claude' };
+    const key = archKey('claude', f.id);
+    const custom = names[key];
+    return { id: f.id, title: custom ?? autoTitle, autoTitle, renamed: custom != null, folder, mtime: f.mtime, archived: archived.has(key), source: 'claude' };
   });
 };
 
@@ -255,7 +284,7 @@ const codexMeta = (head: string): { cwd?: string; title?: string } => {
   return { cwd, title };
 };
 
-const codexSessions = async (archived: Set<string>): Promise<Session[]> => {
+const codexSessions = async (archived: Set<string>, names: Record<string, string>): Promise<Session[]> => {
   let rel: string[];
   try {
     rel = readdirSync(CODEX_DIR, { recursive: true }) as string[];
@@ -283,7 +312,10 @@ const codexSessions = async (archived: Set<string>): Promise<Session[]> => {
         /* ignora */
       }
       const { cwd, title } = codexMeta(head);
-      return { id, title: title || '(sem título)', folder: cwd ?? '—', mtime, archived: archived.has(archKey('codex', id)), source: 'codex' };
+      const autoTitle = title || '(sem título)';
+      const key = archKey('codex', id);
+      const custom = names[key];
+      return { id, title: custom ?? autoTitle, autoTitle, renamed: custom != null, folder: cwd ?? '—', mtime, archived: archived.has(key), source: 'codex' };
     }),
   );
   return out.filter((s): s is Session => s !== null);
@@ -291,9 +323,10 @@ const codexSessions = async (archived: Set<string>): Promise<Session[]> => {
 
 const sessions = async (want: Record<Source, boolean>): Promise<Session[]> => {
   const archived = readArchived();
+  const names = readNames();
   const all: Session[] = [];
-  if (want.claude) all.push(...claudeSessions(archived));
-  if (want.codex) all.push(...(await codexSessions(archived)));
+  if (want.claude) all.push(...claudeSessions(archived, names));
+  if (want.codex) all.push(...(await codexSessions(archived, names)));
   return all.sort((a, b) => b.mtime - a.mtime);
 };
 
@@ -321,6 +354,18 @@ Bun.serve({
       if (!body.folder) return json({ ok: false, error: 'folder requerido' }, 400);
       // abre a pasta no VS Code (nova janela; reusa se já estiver aberta). Em bg pra não travar.
       sh(`code ${JSON.stringify(body.folder)} >/dev/null 2>&1 &`);
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/api/rename' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as { id?: string; source?: Source; title?: string };
+      if (!body.id) return json({ ok: false, error: 'id requerido' }, 400);
+      const names = readNames();
+      const key = archKey(body.source === 'codex' ? 'codex' : 'claude', body.id);
+      const title = (body.title ?? '').trim();
+      if (title) names[key] = title.slice(0, 120);
+      else delete names[key]; // título vazio = volta ao automático
+      writeNames(names);
       return json({ ok: true });
     }
 
@@ -431,6 +476,9 @@ const HTML = /* html */ `<!doctype html>
   .btn-vscode { background:var(--blue-soft); color:var(--blue); }
   .btn-vscode:hover { background:var(--blue); color:var(--bg); }
   .btn-vscode svg { width:15px; height:15px; fill:currentColor; }
+  .btn-edit { background:transparent; color:var(--muted); border-color:var(--line); }
+  .btn-edit:hover { color:var(--ink); border-color:var(--muted); background:var(--surface-2); }
+  .btn-edit svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .actions { display:flex; gap:var(--s2); flex-shrink:0; }
   .card.dim { opacity:.55; }
   .card.dim:hover { opacity:1; }
@@ -587,6 +635,18 @@ function toggleArchived() {
   renderSessions();
 }
 
+async function rename(id, source, current, autoTitle, btn) {
+  const v = prompt('Renomear sessão (deixe vazio para voltar ao título automático):', current);
+  if (v === null) return; // cancelou
+  const name = v.trim();
+  try {
+    await fetch('/api/rename', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ id, source, title: name }) });
+  } catch { return; }
+  const s = SESS.find(x => x.id === id && x.source === source);
+  if (s) { s.title = name || autoTitle; s.renamed = !!name; }
+  renderSessions();
+}
+
 async function archive(id, source, flag, btn) {
   btn.disabled = true;
   try {
@@ -620,7 +680,7 @@ function renderSessions() {
   document.getElementById('sessions').innerHTML = list.length ? list.map(s => \`
     <div class="card\${s.archived ? ' dim' : ''}">
       <div class="main">
-        <div class="title">\${esc(s.title)}</div>
+        <div class="title"\${s.renamed ? \` title="auto: \${esc(s.autoTitle)}"\` : ''}>\${esc(s.title)}</div>
         <div class="meta">
           <span class="chip src-\${s.source}">\${s.source === 'codex' ? 'Codex' : 'Claude'}</span>
           <span class="chip folder" title="\${esc(s.folder)}">\${esc(s.folder)}</span>
@@ -629,6 +689,7 @@ function renderSessions() {
         </div>
       </div>
       <div class="actions">
+        <button class="btn btn-edit btn-icon" title="Renomear sessão" onclick='rename(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${JSON.stringify(s.title)}, \${JSON.stringify(s.autoTitle)}, this)'><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
         <button class="btn btn-vscode btn-icon" title="Abrir a pasta no VS Code" onclick='openIn(\${JSON.stringify(s.folder)}, this)'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
         <button class="btn btn-copy" onclick='resume(\${JSON.stringify(s.folder)}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'>Retomar</button>
         <button class="btn btn-arch" onclick='archive(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${!s.archived}, this)'>\${s.archived ? 'Desarquivar' : 'Arquivar'}</button>
