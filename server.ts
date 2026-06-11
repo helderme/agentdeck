@@ -916,7 +916,9 @@ const shq = (s: string): string => "'" + s.replace(/'/g, "'\\''") + "'";
 // a sessão também enxerga — Claude via `--add-dir <d...>`, Codex via `--add-dir <d>` repetido
 // (o equivalente, no terminal, ao multi-root do VS Code: uma sessão ciente de vários repos).
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'minimal'];
-const newSession = (source: Source, folder: string, addDirs: string[] = [], opts: { model?: string; effort?: string } = {}): boolean => {
+const CLAUDE_MODES = ['default', 'acceptEdits', 'plan', 'auto']; // --permission-mode
+const CODEX_MODES: Record<string, string> = { ask: '-a untrusted', approve: '-a on-request', full: '--dangerously-bypass-approvals-and-sandbox' };
+const newSession = (source: Source, folder: string, addDirs: string[] = [], opts: { model?: string; effort?: string; mode?: string } = {}): boolean => {
   if (!folder || !existsSync(folder)) return false;
   const agent = source === 'codex' ? 'codex' : 'claude';
   const dirs = [...new Set(addDirs)].filter((d) => d && d !== folder && existsSync(d));
@@ -931,6 +933,12 @@ const newSession = (source: Source, folder: string, addDirs: string[] = [], opts
   let optPart = '';
   if (model) optPart += ' --model ' + shq(model);
   if (effort) optPart += source === 'codex' ? ' -c ' + shq('model_reasoning_effort=' + effort) : ' --effort ' + shq(effort);
+  // modo de permissão/aprovação (Claude --permission-mode; Codex flags de approval/sandbox)
+  const mode = opts.mode ?? '';
+  if (mode) {
+    if (source === 'codex') { if (CODEX_MODES[mode]) optPart += ' ' + CODEX_MODES[mode]; }
+    else if (CLAUDE_MODES.includes(mode)) optPart += ' --permission-mode ' + shq(mode);
+  }
   const run = agent + optPart + addPart;             // ex.: claude --model 'opus' --effort 'high' --add-dir '/a'
   const inner = 'cd ' + shq(folder) + ' && ' + run;
   const launch = (bin: string, args: string[]): boolean => {
@@ -1237,14 +1245,15 @@ Bun.serve({
 
     // nova sessão: abre claude/codex num terminal, na pasta escolhida
     if (url.pathname === '/api/new-session' && req.method === 'POST') {
-      const body = (await req.json().catch(() => ({}))) as { source?: Source; folder?: string; addDirs?: string[]; model?: string; effort?: string };
+      const body = (await req.json().catch(() => ({}))) as { source?: Source; folder?: string; addDirs?: string[]; model?: string; effort?: string; mode?: string };
       const source: Source = body.source === 'codex' ? 'codex' : 'claude';
       const folder = (body.folder ?? '').trim();
       const addDirs = Array.isArray(body.addDirs) ? body.addDirs.map((d) => String(d).trim()).filter(Boolean) : [];
       const model = typeof body.model === 'string' ? body.model.trim() : '';
       const effort = typeof body.effort === 'string' ? body.effort.trim() : '';
+      const mode = typeof body.mode === 'string' ? body.mode.trim() : '';
       if (!folder || !existsSync(folder)) return json({ ok: false, error: 'pasta inexistente' }, 400);
-      return json({ ok: newSession(source, folder, addDirs, { model, effort }) });
+      return json({ ok: newSession(source, folder, addDirs, { model, effort, mode }) });
     }
 
     // reinicia: mata o processo atual e re-roda o mesmo comando na mesma pasta.
@@ -1488,9 +1497,18 @@ const HTML = /* html */ `<!doctype html>
   .ns-folders-pick { display:flex; flex-direction:column; gap:6px; margin-top:var(--s2); max-height:200px; overflow:auto; }
   .ns-folders-pick label { display:flex; align-items:center; gap:var(--s2); font-size:13px; color:var(--ink); cursor:pointer; }
   .ns-folders-pick input { accent-color:var(--clay); }
+  .ns-seg { display:flex; gap:var(--s2); margin-top:var(--s3); }
+  .ns-seg button { flex:1; display:flex; align-items:center; justify-content:center; gap:7px; padding:9px; border-radius:var(--r-sm); border:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer; font-family:var(--body); font-size:13px; font-weight:600; transition:all .12s; }
+  .ns-seg button svg { width:15px; height:15px; fill:currentColor; }
+  .ns-seg button:hover { color:var(--ink); }
+  #ns-ag-claude.active { background:var(--claude-brand-soft); color:var(--claude-brand); border-color:transparent; }
+  #ns-ag-codex.active { background:var(--teal-soft); color:var(--teal); border-color:transparent; }
   .ns-opt-row { display:flex; gap:var(--s3); margin-top:var(--s3); }
   .ns-opt { flex:1; display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--muted); }
   .ns-opt .filter { margin:0; }
+  .info-i { display:inline-flex; vertical-align:middle; margin-left:5px; color:var(--muted); cursor:help; }
+  .info-i svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .info-i:hover { color:var(--ink); }
   a.open { color:var(--clay); text-decoration:none; font-size:12px; font-weight:600; }
   a.open:hover { text-decoration:underline; }
   .hint { color:var(--muted); font-size:13px; line-height:1.6; max-width:72ch; margin:0 0 var(--s3); }
@@ -1660,7 +1678,7 @@ const HTML = /* html */ `<!doctype html>
           <h2 class="section-title" style="margin:0">Nova sessão</h2>
           <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeNewSession()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
         </div>
-        <p class="hint">Escolha a pasta e abra uma sessão nova num terminal — o agente roda lá e a sessão aparece aqui ao atualizar.</p>
+        <p class="hint">Escolha a pasta e abra uma sessão nova num terminal.<span class="info-i" title="o agente roda lá e a sessão aparece aqui ao atualizar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span></p>
         <label class="check"><input type="checkbox" id="ns-ws-toggle" onchange="nsToggleWs()" /> Usar um workspace (uma sessão com acesso a vários repos)</label>
         <div class="run-form" id="ns-single">
           <input class="filter" id="ns-folder" placeholder="pasta do projeto (ex.: /home/você/projeto)" />
@@ -1670,27 +1688,23 @@ const HTML = /* html */ `<!doctype html>
           <select class="filter" id="ns-ws-select" onchange="nsRenderWsFolders()"></select>
           <div class="ns-folders-pick" id="ns-ws-folders"></div>
         </div>
+        <div class="ns-seg">
+          <button type="button" id="ns-ag-claude" onclick="nsSetAgent('claude')"><svg viewBox="0 0 24 24"><path d="M4.7 16l4.7-2.6.08-.23-.08-.13h-.23l-.79-.05-2.7-.07-2.33-.1-2.26-.12-.57-.12-.53-.7.05-.35.48-.32.69.06 1.52.1 2.28.16 1.65.1 2.45.25h.39l.05-.16-.13-.1-.1-.1L7 9.84 4.45 8.15l-1.34-.97-.72-.49-.36-.46-.16-1.01.66-.72.88.06.22.06.9.69 1.9 1.47 2.49 1.83.36.3.15-.1.02-.07-.16-.27-1.36-2.45-1.44-2.49-.64-1.03-.17-.62a3 3 0 0 1-.1-.73L6.29.13 6.7 0l1 .13.42.37.62 1.41 1 2.23 1.55 3.03.46.9.24.83.09.25h.16V9.7l.13-1.7.24-2.1.23-2.69.08-.76.38-.91.74-.49.59.28.48.69-.07.44-.28 1.85-.56 2.9-.36 1.94h.21l.24-.24.98-1.3 1.65-2.07.73-.82.85-.9.55-.43h1.03l.76 1.13-.34 1.16-1.06 1.35-.88 1.14-1.26 1.7-.79 1.36.07.1.19-.01 2.85-.61 1.54-.28 1.84-.31.83.39.09.39-.33.81-1.97.49-2.3.46-3.44.81-.04.03.05.06 1.55.15.66.03h1.62l3.02.23.79.52.47.64-.08.49-1.21.62-1.64-.39-3.83-.91-1.31-.33h-.18v.11l1.09 1.07 2 1.8 2.51 2.34.13.57-.32.46-.34-.05-2.2-1.66-.85-.74-1.93-1.62h-.12v.17l.44.65 2.34 3.52.12 1.08-.17.35-.6.21-.67-.12-1.37-1.92-1.42-2.16-.14.08-.67 7.26-.32.37-.73.28-.6-.46-.32-.75.32-1.47.39-1.93.31-1.53.29-1.9.17-.63-.01-.04-.14.02-1.43 1.97-2.18 2.94-1.72 1.85-.41.16-.72-.37.07-.66.4-.59 2.39-3.04 1.44-1.88.93-1.09v-.16h-.06l-6.34 4.12-1.13.14-.49-.45.06-.75.23-.24 1.91-1.31z"/></svg> Claude</button>
+          <button type="button" id="ns-ag-codex" onclick="nsSetAgent('codex')"><svg viewBox="0 0 24 24"><path d="M22.28 9.82a5.98 5.98 0 0 0-.51-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18 5.98 5.98 0 0 0 .98 7.08a6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.52 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07zM13.26 22.43a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.79.79 0 0 0 .4-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.5 4.5zM3.6 18.3a4.47 4.47 0 0 1-.53-3.01l.14.08 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34 7.9a4.49 4.49 0 0 1 2.37-1.98v5.68a.77.77 0 0 0 .39.68l5.81 3.35-2.02 1.17a.08.08 0 0 1-.07 0L3.99 14a4.5 4.5 0 0 1-1.65-6.1zm16.6 3.86L13.1 8.36 15.12 7.2a.08.08 0 0 1 .07 0l4.83 2.8a4.5 4.5 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.4-.66zm2.01-3.02l-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86l-2.02-1.16a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08L8.7 5.46a.79.79 0 0 0-.39.68zm1.1-2.37l2.6-1.5 2.61 1.5v3l-2.6 1.5-2.6-1.5z"/></svg> Codex</button>
+        </div>
         <div class="ns-opt-row">
           <label class="ns-opt">Modelo
-            <input class="filter" id="ns-model" list="ns-model-list" placeholder="padrão do CLI" autocomplete="off" />
-            <datalist id="ns-model-list">
-              <option value="opus"></option><option value="sonnet"></option><option value="haiku"></option><option value="fable"></option>
-              <option value="gpt-5-codex"></option><option value="gpt-5"></option><option value="o3"></option>
-            </datalist>
+            <select class="filter" id="ns-model"></select>
           </label>
           <label class="ns-opt">Effort
-            <select class="filter" id="ns-effort">
-              <option value="">padrão</option>
-              <option value="low">low</option>
-              <option value="medium">medium</option>
-              <option value="high">high</option>
-              <option value="xhigh">xhigh</option>
-            </select>
+            <select class="filter" id="ns-effort"></select>
+          </label>
+          <label class="ns-opt">Modo
+            <select class="filter" id="ns-mode"></select>
           </label>
         </div>
         <div class="newsess-actions">
-          <button class="btn ns-claude" onclick="createSession('claude')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor"><path d="M4.7 16l4.7-2.6.08-.23-.08-.13h-.23l-.79-.05-2.7-.07-2.33-.1-2.26-.12-.57-.12-.53-.7.05-.35.48-.32.69.06 1.52.1 2.28.16 1.65.1 2.45.25h.39l.05-.16-.13-.1-.1-.1L7 9.84 4.45 8.15l-1.34-.97-.72-.49-.36-.46-.16-1.01.66-.72.88.06.22.06.9.69 1.9 1.47 2.49 1.83.36.3.15-.1.02-.07-.16-.27-1.36-2.45-1.44-2.49-.64-1.03-.17-.62a3 3 0 0 1-.1-.73L6.29.13 6.7 0l1 .13.42.37.62 1.41 1 2.23 1.55 3.03.46.9.24.83.09.25h.16V9.7l.13-1.7.24-2.1.23-2.69.08-.76.38-.91.74-.49.59.28.48.69-.07.44-.28 1.85-.56 2.9-.36 1.94h.21l.24-.24.98-1.3 1.65-2.07.73-.82.85-.9.55-.43h1.03l.76 1.13-.34 1.16-1.06 1.35-.88 1.14-1.26 1.7-.79 1.36.07.1.19-.01 2.85-.61 1.54-.28 1.84-.31.83.39.09.39-.33.81-1.97.49-2.3.46-3.44.81-.04.03.05.06 1.55.15.66.03h1.62l3.02.23.79.52.47.64-.08.49-1.21.62-1.64-.39-3.83-.91-1.31-.33h-.18v.11l1.09 1.07 2 1.8 2.51 2.34.13.57-.32.46-.34-.05-2.2-1.66-.85-.74-1.93-1.62h-.12v.17l.44.65 2.34 3.52.12 1.08-.17.35-.6.21-.67-.12-1.37-1.92-1.42-2.16-.14.08-.67 7.26-.32.37-.73.28-.6-.46-.32-.75.32-1.47.39-1.93.31-1.53.29-1.9.17-.63-.01-.04-.14.02-1.43 1.97-2.18 2.94-1.72 1.85-.41.16-.72-.37.07-.66.4-.59 2.39-3.04 1.44-1.88.93-1.09v-.16h-.06l-6.34 4.12-1.13.14-.49-.45.06-.75.23-.24 1.91-1.31z"/></svg> Claude</button>
-          <button class="btn ns-codex" onclick="createSession('codex')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor"><path d="M22.28 9.82a5.98 5.98 0 0 0-.51-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18 5.98 5.98 0 0 0 .98 7.08a6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.52 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07zM13.26 22.43a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.79.79 0 0 0 .4-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.5 4.5zM3.6 18.3a4.47 4.47 0 0 1-.53-3.01l.14.08 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34 7.9a4.49 4.49 0 0 1 2.37-1.98v5.68a.77.77 0 0 0 .39.68l5.81 3.35-2.02 1.17a.08.08 0 0 1-.07 0L3.99 14a4.5 4.5 0 0 1-1.65-6.1zm16.6 3.86L13.1 8.36 15.12 7.2a.08.08 0 0 1 .07 0l4.83 2.8a4.5 4.5 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.4-.66zm2.01-3.02l-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86l-2.02-1.16a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08L8.7 5.46a.79.79 0 0 0-.39.68zm1.1-2.37l2.6-1.5 2.61 1.5v3l-2.6 1.5-2.6-1.5z"/></svg> Codex</button>
+          <button class="btn ns-claude" id="ns-go" onclick="createSession()">Abrir sessão</button>
         </div>
       </div>
     </div>
@@ -1816,10 +1830,30 @@ async function pickFolder(inputId) {
 // ── Nova sessão (modal do "+") ──
 function openNewSession() {
   document.getElementById('ns-ws-toggle').checked = false; nsToggleWs();
+  nsSetAgent('claude');           // define agente + popula modelo/effort
   document.getElementById('newsess-modal').classList.add('open');
   setTimeout(() => document.getElementById('ns-folder').focus(), 0);
 }
 function closeNewSession() { document.getElementById('newsess-modal').classList.remove('open'); }
+// escolhe o agente primeiro; modelo/effort listam só o que aquele CLI aceita
+let nsAgent = 'claude';
+const NS_MODELS = { claude: ['opus', 'sonnet', 'haiku', 'fable'], codex: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'] };
+const NS_EFFORTS = { claude: ['low', 'medium', 'high', 'xhigh', 'max'], codex: ['low', 'medium', 'high', 'xhigh'] };
+const NS_MODES = {
+  claude: [['default', 'Ask before edits'], ['acceptEdits', 'Edit automatically'], ['plan', 'Plan mode'], ['auto', 'Auto mode']],
+  codex: [['ask', 'Ask for approval'], ['approve', 'Approve for me'], ['full', 'Full access']],
+};
+function nsSetAgent(a) {
+  nsAgent = a === 'codex' ? 'codex' : 'claude';
+  document.getElementById('ns-ag-claude').classList.toggle('active', nsAgent === 'claude');
+  document.getElementById('ns-ag-codex').classList.toggle('active', nsAgent === 'codex');
+  const opts = (list, label) => '<option value="">' + label + '</option>' + list.map(x => '<option value="' + x + '">' + x + '</option>').join('');
+  const optsPairs = (pairs, label) => '<option value="">' + label + '</option>' + pairs.map(p => '<option value="' + p[0] + '">' + p[1] + '</option>').join('');
+  document.getElementById('ns-model').innerHTML = opts(NS_MODELS[nsAgent], 'padrão do CLI');
+  document.getElementById('ns-effort').innerHTML = opts(NS_EFFORTS[nsAgent], 'padrão');
+  document.getElementById('ns-mode').innerHTML = optsPairs(NS_MODES[nsAgent], 'padrão');
+  document.getElementById('ns-go').className = 'btn ' + (nsAgent === 'codex' ? 'ns-codex' : 'ns-claude');
+}
 function nsToggleWs() {
   const on = document.getElementById('ns-ws-toggle').checked;
   document.getElementById('ns-single').style.display = on ? 'none' : '';
@@ -1835,12 +1869,13 @@ function nsRenderWsFolders() {
   const w = WS.find(x => x.name === name);
   const fs = w ? w.folders : [];
   const head = fs.length > 1
-    ? '<div class="hint">Escolha a <b>pasta-raiz</b> (cwd) da sessão. As demais entram como <code>--add-dir</code> — uma sessão só, ciente de todos os repos.</div>'
+    ? '<div class="hint">Escolha a <b>pasta-raiz</b> (cwd) da sessão.<span class="info-i" title="As demais entram como --add-dir — uma sessão só, ciente de todos os repos."><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span></div>'
     : '';
   document.getElementById('ns-ws-folders').innerHTML = head + fs.map((f, i) =>
     '<label><input type="radio" name="ns-root" value="' + esc(f) + '"' + (i === 0 ? ' checked' : '') + ' /> <span class="mono">' + esc(f) + '</span></label>').join('');
 }
 async function createSession(source) {
+  source = source || nsAgent;     // botão único usa o agente escolhido no topo
   let folder, addDirs = [];
   if (document.getElementById('ns-ws-toggle').checked) {
     const all = [...document.querySelectorAll('#ns-ws-folders input[name="ns-root"]')].map(r => r.value);
@@ -1854,7 +1889,8 @@ async function createSession(source) {
   }
   const model = document.getElementById('ns-model').value.trim();
   const effort = document.getElementById('ns-effort').value;
-  let r; try { r = await (await fetch('/api/new-session', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ source, folder, addDirs, model, effort }) })).json(); } catch {}
+  const mode = document.getElementById('ns-mode').value;
+  let r; try { r = await (await fetch('/api/new-session', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ source, folder, addDirs, model, effort, mode }) })).json(); } catch {}
   if (r && r.ok) {
     const label = source === 'codex' ? 'Codex' : 'Claude';
     toast(addDirs.length ? '✓ sessão ' + label + ' aberta (' + (addDirs.length + 1) + ' repos)' : '✓ sessão ' + label + ' aberta', 'ok');
