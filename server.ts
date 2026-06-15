@@ -1034,6 +1034,12 @@ Bun.serve({
       let out = '', ok = true;
       try { out = execFileSync('git', ['-C', REPO_DIR, 'pull', '--ff-only'], { encoding: 'utf8' }); }
       catch (e: any) { ok = false; out = String(e?.stdout ?? '') + String(e?.stderr ?? e?.message ?? ''); }
+      // deu certo → reinicia o servidor pra carregar o código novo (o front recarrega sozinho).
+      // start.sh reusa um servidor já no ar, então atualizar exige reiniciar o processo.
+      if (ok) setTimeout(() => {
+        try { spawn('bash', ['-c', 'sleep 0.5; exec "$0" "$@"', process.argv[0], ...process.argv.slice(1)], { cwd: REPO_DIR, detached: true, stdio: 'ignore' }).unref(); } catch { /* sem bash → reabra manual */ }
+        process.exit(0);
+      }, 300);
       return json({ ok, output: out.slice(0, 2000) });
     }
 
@@ -1408,7 +1414,7 @@ Bun.serve({
       return json({ ok: true });
     }
 
-    return new Response(HTML, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+    return new Response(HTML, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
   },
 });
 
@@ -1986,6 +1992,7 @@ const I18N = {
   'Atualizado — reabrir': 'Updated — reopen',
   'Atualizado! Feche e reabra o painel pra aplicar': 'Updated! Close and reopen the panel to apply',
   'Falha ao atualizar — rode git pull manualmente': 'Update failed — run git pull manually',
+  'Atualizado! Reiniciando o painel…': 'Updated! Restarting the panel…',
   // — login / logout (contas) —
   'Nenhuma conta conectada': 'No account connected',
   'Entrar no Claude': 'Sign in to Claude',
@@ -2704,12 +2711,14 @@ async function doUpdate() {
   const pill = document.getElementById('upd-pill');
   pill.disabled = true; pill.textContent = t('Atualizando…');
   let r; try { r = await (await fetch('/api/update', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' })).json(); } catch {}
-  pill.disabled = false;
   if (r && r.ok) {
-    pill.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> ' + t('Atualizado — reabrir');
-    pill.onclick = closePanel; // reabrir pelo ícone carrega o código novo
-    toast(t('Atualizado! Feche e reabra o painel pra aplicar'), 'ok');
+    // o servidor está reiniciando com o código novo — espera ele voltar e recarrega a página
+    pill.innerHTML = '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v4h-4"/></svg> ' + t('Reiniciando…');
+    toast(t('Atualizado! Reiniciando o painel…'), 'ok');
+    const tryReload = (n) => fetch('/api/state', { cache: 'no-store' }).then(x => { if (x.ok) location.reload(); else throw 0; }).catch(() => n > 0 ? setTimeout(() => tryReload(n - 1), 700) : location.reload());
+    setTimeout(() => tryReload(20), 1500);
   } else {
+    pill.disabled = false;
     pill.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg> ' + t('Atualizar app');
     toast(t('Falha ao atualizar — rode git pull manualmente'), 'err');
   }
