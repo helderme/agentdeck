@@ -1490,6 +1490,10 @@ const HTML = /* html */ `<!doctype html>
   /* barra de painel offline: fixa no topo, sobre todas as abas */
   .offbar { position:fixed; top:0; left:0; right:0; z-index:100; display:none; align-items:center; justify-content:center; gap:var(--s3); padding:9px 16px; background:var(--red-soft); color:var(--red); border-bottom:1px solid color-mix(in oklch, var(--red) 45%, var(--line)); font-size:13px; font-weight:600; }
   .offbar.show { display:flex; }
+  /* X de fechar no canto sup. esquerdo — garante fechar a janela --app mesmo sem barra do WM */
+  .appclose { position:fixed; top:7px; left:7px; z-index:200; width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:50%; background:var(--surface); color:var(--muted); cursor:pointer; opacity:.45; transition:opacity .15s, color .15s, border-color .15s; }
+  .appclose:hover { opacity:1; color:var(--red); border-color:var(--red); }
+  .appclose svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
   .loginbar { position:fixed; top:0; left:0; right:0; z-index:100; display:none; align-items:center; justify-content:center; gap:var(--s3); padding:9px 16px; background:var(--clay-soft); color:var(--clay); border-bottom:1px solid color-mix(in oklch, var(--clay) 45%, var(--line)); font-size:13px; font-weight:600; }
   .loginbar.show { display:flex; }
   .loginbar svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
@@ -1715,6 +1719,7 @@ const HTML = /* html */ `<!doctype html>
 </style>
 </head>
 <body>
+  <button class="appclose" id="appclose" onclick="closePanel()" title="Fechar"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
   <div class="offbar" id="offbar">
     <svg viewBox="0 0 24 24"><path d="M3 3l18 18M8.5 8.5A6 6 0 0 0 6 14h2M16.5 16.5a6 6 0 0 0-3-2.4M12 6a8 8 0 0 1 7 4"/><path d="M12 18h.01"/></svg>
     <span>Painel offline — reabra pelo ícone do AgentDeck</span>
