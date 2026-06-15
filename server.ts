@@ -1358,7 +1358,7 @@ const HTML = /* html */ `<!doctype html>
   ::-webkit-scrollbar-thumb { background:var(--clay); border-radius:999px; border:4px solid var(--bg); background-clip:padding-box; }
   ::-webkit-scrollbar-thumb:hover { border-width:3px; }
   ::-webkit-scrollbar-corner { background:transparent; }
-  body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased; min-height:100vh; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.6; -webkit-font-smoothing:antialiased; min-height:100vh; visibility:hidden; } /* visibility revelada por applyLang() após traduzir (anti-flash PT→EN) */
   .wrap { max-width:880px; margin:0 auto; padding:var(--s6) var(--s4) var(--s7); }
   /* barra de painel offline: fixa no topo, sobre todas as abas */
   .offbar { position:fixed; top:0; left:0; right:0; z-index:100; display:none; align-items:center; justify-content:center; gap:var(--s3); padding:9px 16px; background:var(--red-soft); color:var(--red); border-bottom:1px solid color-mix(in oklch, var(--red) 45%, var(--line)); font-size:13px; font-weight:600; }
@@ -1582,6 +1582,7 @@ const HTML = /* html */ `<!doctype html>
       <h1><span class="dot" id="status-dot"></span> AgentDeck</h1>
       <div class="hdr-right">
         <span class="acct-row" id="acct"></span>
+        <button class="btn btn-ghost btn-icon" id="lang-btn" onclick="toggleLang()" title="English / Português">PT</button>
         <button class="btn btn-ghost btn-icon" id="theme-btn" onclick="toggleTheme()" title="Alternar tema claro/escuro">
           <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
           <svg class="ic-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
@@ -1590,25 +1591,25 @@ const HTML = /* html */ `<!doctype html>
     </header>
 
     <div class="tabs">
-      <button class="tab active" id="tab-sessions" onclick="switchTab('sessions')">Sessões <span class="badge" id="badge-sessions">–</span></button>
-      <button class="tab" id="tab-watch" onclick="switchTab('watch')">Processos <span class="badge" id="badge-watch">0</span></button>
-      <button class="tab" id="tab-workspaces" onclick="switchTab('workspaces')">Workspaces <span class="badge" id="badge-ws">0</span></button>
+      <button class="tab active" id="tab-sessions" onclick="switchTab('sessions')"><span>Sessões</span> <span class="badge" id="badge-sessions">–</span></button>
+      <button class="tab" id="tab-watch" onclick="switchTab('watch')"><span>Processos</span> <span class="badge" id="badge-watch">0</span></button>
+      <button class="tab" id="tab-workspaces" onclick="switchTab('workspaces')"><span>Workspaces</span> <span class="badge" id="badge-ws">0</span></button>
     </div>
 
     <section class="panel active" id="panel-sessions">
       <div class="row sess-head">
-        <h2 class="section-title">Sessões <span class="sub" id="sess-count"></span></h2>
+        <h2 class="section-title"><span>Sessões</span> <span class="sub" id="sess-count"></span></h2>
         <span class="actions">
           <button class="btn btn-ghost" id="sess-fav-toggle" onclick="toggleFav()">Favoritas (0)</button>
           <button class="btn btn-ghost" id="sess-archived-toggle" onclick="toggleArchived()">Arquivadas (0)</button>
-          <label class="btn btn-ghost" title="Importar sessões de um .json exportado">Importar<input type="file" id="imp-file" accept=".json,application/json" onchange="impPick(event)" hidden /></label>
+          <label class="btn btn-ghost" title="Importar sessões de um .json exportado"><span>Importar</span><input type="file" id="imp-file" accept=".json,application/json" onchange="impPick(event)" hidden /></label>
           <button class="btn btn-ghost" id="sess-reload" onclick="loadSessions()">Atualizar</button>
         </span>
       </div>
       <div class="srcbar">
-        <button class="src on" id="src-claude" onclick="toggleSource('claude')"><svg class="ico" viewBox="0 0 24 24"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg> Claude</button>
-        <button class="src on" id="src-codex" onclick="toggleSource('codex')"><svg class="ico" viewBox="0 0 24 24"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997z"/></svg> Codex</button>
-        <button class="src new-sess" onclick="openNewSession()" title="Nova sessão"><svg class="ico" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round"><path d="M12 5v14M5 12h14"/></svg> Nova sessão</button>
+        <button class="src on" id="src-claude" onclick="toggleSource('claude')"><svg class="ico" viewBox="0 0 24 24"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg> <span>Claude</span></button>
+        <button class="src on" id="src-codex" onclick="toggleSource('codex')"><svg class="ico" viewBox="0 0 24 24"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997z"/></svg> <span>Codex</span></button>
+        <button class="src new-sess" onclick="openNewSession()" title="Nova sessão"><svg class="ico" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round"><path d="M12 5v14M5 12h14"/></svg> <span>Nova sessão</span></button>
       </div>
       <input class="filter" id="sess-filter" placeholder="filtrar por título ou pasta…" oninput="resetPage(); renderSessions()" />
       <div id="sessions"></div>
@@ -1638,19 +1639,17 @@ const HTML = /* html */ `<!doctype html>
         <h2 class="section-title" style="margin:0">Workspaces</h2>
         <button class="btn btn-copy" onclick="openWsModal()">+ Novo workspace</button>
       </div>
-      <p class="hint">Agrupe pastas de projetos (ex.: <code>admin</code>, <code>dashboard</code>, <code>api</code>). Depois dá pra
-        abrir tudo no VS Code de uma vez, criar sessões em qualquer pasta dele e filtrar as Sessões por workspace.</p>
+      <p class="hint" data-i18n>Agrupe pastas de projetos (ex.: <code>admin</code>, <code>dashboard</code>, <code>api</code>). Depois dá pra abrir tudo no VS Code de uma vez, criar sessões em qualquer pasta dele e filtrar as Sessões por workspace.</p>
       <div id="ws-list"></div>
     </section>
 
     <div class="modal-bg" id="imp-modal" onclick="if(event.target===this)closeImport()">
       <div class="modal">
         <div class="modal-head">
-          <h2 class="section-title" style="margin:0">Importar sessões <span class="sub" id="imp-name"></span></h2>
+          <h2 class="section-title" style="margin:0"><span>Importar sessões</span> <span class="sub" id="imp-name"></span></h2>
           <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeImport()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
         </div>
-        <p class="hint">Preview do que vai mudar (home, cwd, pasta codificada) — nada é escrito até você
-          <b>Aplicar</b>. Apontamentos que o remap automático não cobre aparecem pra você <b>ignorar</b> ou ajustar.</p>
+        <p class="hint" data-i18n>Preview do que vai mudar (home, cwd, pasta codificada) — nada é escrito até você <b>Aplicar</b>. Apontamentos que o remap automático não cobre aparecem pra você <b>ignorar</b> ou ajustar.</p>
         <div id="imp-plan"></div>
       </div>
     </div>
@@ -1688,7 +1687,7 @@ const HTML = /* html */ `<!doctype html>
     <div class="modal-bg" id="log-modal" onclick="if(event.target===this)closeLog()">
       <div class="modal">
         <div class="modal-head">
-          <h2 class="section-title" style="margin:0">Logs <span class="sub" id="log-title"></span></h2>
+          <h2 class="section-title" style="margin:0"><span>Logs</span> <span class="sub" id="log-title"></span></h2>
           <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeLog()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
         </div>
         <pre class="logbox" id="log-body"></pre>
@@ -1701,8 +1700,8 @@ const HTML = /* html */ `<!doctype html>
           <h2 class="section-title" style="margin:0">Nova sessão</h2>
           <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeNewSession()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
         </div>
-        <p class="hint">Escolha a pasta e abra uma sessão nova num terminal.<span class="info-i" title="o agente roda lá e a sessão aparece aqui ao atualizar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span></p>
-        <label class="check"><input type="checkbox" id="ns-ws-toggle" onchange="nsToggleWs()" /> Usar um workspace (uma sessão com acesso a vários repos)</label>
+        <p class="hint"><span>Escolha a pasta e abra uma sessão nova num terminal.</span><span class="info-i" title="o agente roda lá e a sessão aparece aqui ao atualizar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span></p>
+        <label class="check"><input type="checkbox" id="ns-ws-toggle" onchange="nsToggleWs()" /> <span>Usar um workspace (uma sessão com acesso a vários repos)</span></label>
         <div class="run-form" id="ns-single">
           <input class="filter" id="ns-folder" placeholder="pasta do projeto (ex.: /home/você/projeto)" />
           <button class="btn btn-ghost btn-icon" onclick="pickFolder('ns-folder')" title="Escolher pasta"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
@@ -1716,13 +1715,13 @@ const HTML = /* html */ `<!doctype html>
           <button type="button" id="ns-ag-codex" onclick="nsSetAgent('codex')"><svg viewBox="0 0 24 24"><path d="M22.28 9.82a5.98 5.98 0 0 0-.51-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18 5.98 5.98 0 0 0 .98 7.08a6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.52 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07zM13.26 22.43a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.79.79 0 0 0 .4-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.5 4.5zM3.6 18.3a4.47 4.47 0 0 1-.53-3.01l.14.08 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34 7.9a4.49 4.49 0 0 1 2.37-1.98v5.68a.77.77 0 0 0 .39.68l5.81 3.35-2.02 1.17a.08.08 0 0 1-.07 0L3.99 14a4.5 4.5 0 0 1-1.65-6.1zm16.6 3.86L13.1 8.36 15.12 7.2a.08.08 0 0 1 .07 0l4.83 2.8a4.5 4.5 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.4-.66zm2.01-3.02l-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86l-2.02-1.16a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08L8.7 5.46a.79.79 0 0 0-.39.68zm1.1-2.37l2.6-1.5 2.61 1.5v3l-2.6 1.5-2.6-1.5z"/></svg> Codex</button>
         </div>
         <div class="ns-opt-row">
-          <label class="ns-opt">Modelo
+          <label class="ns-opt"><span>Modelo</span>
             <select class="filter" id="ns-model"></select>
           </label>
-          <label class="ns-opt">Effort
+          <label class="ns-opt"><span>Effort</span>
             <select class="filter" id="ns-effort"></select>
           </label>
-          <label class="ns-opt">Modo
+          <label class="ns-opt"><span>Modo</span>
             <select class="filter" id="ns-mode"></select>
           </label>
         </div>
@@ -1738,7 +1737,7 @@ const HTML = /* html */ `<!doctype html>
           <h2 class="section-title" style="margin:0" id="ws-modal-title">Novo workspace</h2>
           <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeWsModal()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
         </div>
-        <p class="hint">Dê um nome e escolha as pastas do grupo. Use o <b>+ adicionar pasta</b> pra incluir mais de uma.</p>
+        <p class="hint" data-i18n>Dê um nome e escolha as pastas do grupo. Use o <b>+ adicionar pasta</b> pra incluir mais de uma.</p>
         <input class="filter" id="ws-name" placeholder="nome do workspace (ex.: Efex)" />
         <div id="ws-folders"></div>
         <div class="row sess-head" style="margin-top:var(--s2)">
@@ -1757,33 +1756,337 @@ const HTML = /* html */ `<!doctype html>
           <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeHelp()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
         </div>
         <div class="help-text">
-          <p><b>Sessões.</b> Lista as sessões do <b>Claude Code</b> (<code>~/.claude/projects</code>) e do
-          <b>Codex</b> (<code>~/.codex/sessions</code>) — ligue as fontes (Claude/Codex) e clique em <b>Atualizar</b>.
-          Cada sessão mostra pasta, origem (terminal/VS Code), tokens, se está <b>● ativa</b> e um trecho da última mensagem.
-          Filtre por título/pasta (atalho <code>/</code>), clique no chip da pasta pra filtrar por projeto, e <b>Enter</b> retoma a 1ª.
-          Ícones do card (passe o mouse): abrir no <b>VS Code</b> (pasta + a conversa na extensão), <b>retomar</b>
-          (copia <code>claude --resume</code> / <code>codex resume</code> pro terminal), <b>★ favoritar</b>, <b>📌 fixar</b>,
-          <b>⋮</b> (detalhes da sessão e baixar o <code>.json</code>) e <b>arquivar</b> (só organiza a visão, nada é apagado).
-          Renomear é inline (lápis). A lista mostra 20 por vez (<b>Ver mais</b>/<b>Ver todas</b>). O botão <b>Importar</b>
-          (topo) carrega um <code>.json</code> exportado com preview de remap. O acento muda com as fontes: só Claude = laranja,
-          só Codex = verde, ambos/nenhum = azul.</p>
-          <p><b>Processos.</b> Lista o que ficou rodando em background (dev servers iniciados pelo Claude + os iniciados aqui),
-          com a pasta de cada um; atualiza a cada 2,5s na aba. Dá pra <b>Iniciar</b> um processo (escolhendo a pasta no seletor
-          do sistema 📁 e o comando), ver o <b>histórico</b> 🕐 dos iniciados (com pin e re-iniciar), <b>Reiniciar</b> ou
-          <b>Finalizar</b> (mata o processo e os filhos com SIGTERM). Também para <b>containers Docker</b>.</p>
-          <p>No topo, os chips mostram a conta logada (Claude/Codex). Tudo é local em <code>127.0.0.1</code>: só lê e mata
-          na sua máquina, e nenhum token de login é exposto.</p>
+          <p data-i18n><b>Sessões.</b> Lista as sessões do <b>Claude Code</b> (<code>~/.claude/projects</code>) e do <b>Codex</b> (<code>~/.codex/sessions</code>) — ligue as fontes (Claude/Codex) e clique em <b>Atualizar</b>. Cada sessão mostra pasta, origem (terminal/VS Code), tokens, se está <b>● ativa</b> e um trecho da última mensagem. Filtre por título/pasta (atalho <code>/</code>), clique no chip da pasta pra filtrar por projeto, e <b>Enter</b> retoma a 1ª. Ícones do card (passe o mouse): abrir no <b>VS Code</b> (pasta + a conversa na extensão), <b>retomar</b> (copia <code>claude --resume</code> / <code>codex resume</code> pro terminal), <b>★ favoritar</b>, <b>📌 fixar</b>, <b>⋮</b> (detalhes da sessão e baixar o <code>.json</code>) e <b>arquivar</b> (só organiza a visão, nada é apagado). Renomear é inline (lápis). A lista mostra 20 por vez (<b>Ver mais</b>/<b>Ver todas</b>). O botão <b>Importar</b> (topo) carrega um <code>.json</code> exportado com preview de remap. O acento muda com as fontes: só Claude = laranja, só Codex = verde, ambos/nenhum = azul.</p>
+          <p data-i18n><b>Processos.</b> Lista o que ficou rodando em background (dev servers iniciados pelo Claude + os iniciados aqui), com a pasta de cada um; atualiza a cada 2,5s na aba. Dá pra <b>Iniciar</b> um processo (escolhendo a pasta no seletor do sistema 📁 e o comando), ver o <b>histórico</b> 🕐 dos iniciados (com pin e re-iniciar), <b>Reiniciar</b> ou <b>Finalizar</b> (mata o processo e os filhos com SIGTERM). Também para <b>containers Docker</b>.</p>
+          <p data-i18n>No topo, os chips mostram a conta logada (Claude/Codex). Tudo é local em <code>127.0.0.1</code>: só lê e mata na sua máquina, e nenhum token de login é exposto.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <button class="foot-info" onclick="openHelp()" title="Como funciona"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg> Como funciona</button>
+  <button class="foot-info" onclick="openHelp()" title="Como funciona"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg> <span>Como funciona</span></button>
 
 <script>
 const fmtUp = (s) => { const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
   return h ? \`\${h}h \${m}m\` : m ? \`\${m}m \${sec}s\` : \`\${sec}s\`; };
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ── i18n: inglês é o padrão; PT é a fonte no HTML, traduzida ao vivo (sem reload) ──
+const I18N = {
+  // 'string em português (a fonte)': 'English translation'
+  // — abas, cabeçalho, botões fixos —
+  'Sessões': 'Sessions',
+  'Processos': 'Processes',
+  'Workspaces': 'Workspaces',
+  'Favoritas (0)': 'Favorites (0)',
+  'Arquivadas (0)': 'Archived (0)',
+  'Importar': 'Import',
+  'Importar sessões de um .json exportado': 'Import sessions from an exported .json',
+  'Atualizar': 'Refresh',
+  'Claude': 'Claude',
+  'Codex': 'Codex',
+  'Nova sessão': 'New session',
+  'filtrar por título ou pasta…': 'filter by title or folder…',
+  'Alternar tema claro/escuro': 'Toggle light/dark theme',
+  'Painel offline — reabra pelo ícone do AgentDeck': 'Panel offline — reopen via the AgentDeck icon',
+  'Fechar': 'Close',
+  'Como funciona': 'How it works',
+  // — aba Processos —
+  'Iniciar um processo': 'Start a process',
+  'Histórico de processos iniciados': 'History of started processes',
+  'pasta (ex.: /home/você/projeto)': 'folder (e.g. /home/you/project)',
+  'Escolher pasta (seletor do sistema)': 'Choose folder (system picker)',
+  'comando (ex.: npm run dev)': 'command (e.g. npm run dev)',
+  'Iniciar': 'Start',
+  'Processos em background': 'Background processes',
+  'Containers Docker': 'Docker containers',
+  'Reiniciar': 'Restart',
+  'Finalizar': 'Stop',
+  'Parar': 'Stop',
+  'Ver logs': 'View logs',
+  'Ver logs da última execução': 'View logs of last run',
+  'Iniciar de novo': 'Start again',
+  'Fixar': 'Pin',
+  'Desafixar': 'Unpin',
+  'Docker': 'Docker',
+  'Nada rodando em background agora.': 'Nothing running in the background now.',
+  'Nenhum container Docker ativo.': 'No active Docker containers.',
+  'Processos iniciados': 'Started processes',
+  'Nenhum processo iniciado ainda.': 'No processes started yet.',
+  'Carregando…': 'Loading…',
+  'Falha ao ler o histórico.': 'Failed to read history.',
+  // — aba Workspaces —
+  '+ Novo workspace': '+ New workspace',
+  'Novo workspace': 'New workspace',
+  'nome do workspace (ex.: Efex)': 'workspace name (e.g. Efex)',
+  '+ adicionar pasta': '+ add folder',
+  'Criar workspace': 'Create workspace',
+  'Salvar alterações': 'Save changes',
+  'Editar workspace': 'Edit workspace',
+  'pasta…': 'folder…',
+  'Escolher pasta': 'Choose folder',
+  'Remover': 'Remove',
+  'Mais ações': 'More actions',
+  'Duplicar': 'Duplicate',
+  'Editar': 'Edit',
+  'Excluir': 'Delete',
+  'Abrir tudo no VS Code': 'Open everything in VS Code',
+  'Filtrar sessões': 'Filter sessions',
+  'Nenhum workspace ainda — crie um acima.': 'No workspaces yet — create one above.',
+  'Abrindo no VS Code…': 'Opening in VS Code…',
+  // — modal Importar —
+  'Importar sessões': 'Import sessions',
+  'Analisando…': 'Analyzing…',
+  'Falha ao analisar.': 'Failed to analyze.',
+  'Erro:': 'Error:',
+  'arquivo não é JSON válido.': 'file is not valid JSON.',
+  'bundle inválido': 'invalid bundle',
+  'Aplicar importação': 'Apply import',
+  'Copiar prompt pra IA': 'Copy prompt for AI',
+  'Sobrescrever (já existe nesta máquina)': 'Overwrite (already exists on this machine)',
+  'Segredos:': 'Secrets:',
+  'Apontamentos fora da home (marcado = ignora; desmarque para substituir):': 'Paths outside home (checked = ignore; uncheck to replace):',
+  'substituir por…': 'replace with…',
+  'Sem apontamentos fora da home — o remap automático cobre tudo.': 'No paths outside home — the automatic remap covers everything.',
+  'Pasta de destino (cwd nesta máquina):': 'Destination folder (cwd on this machine):',
+  'Vai escrever em:': 'Will write to:',
+  'Resultado': 'Result',
+  'Fechar e atualizar': 'Close and refresh',
+  'copiado ✓': 'copied ✓',
+  'nada': 'nothing',
+  'importada:': 'imported:',
+  'retomar:': 'resume:',
+  'Origem:': 'Source:',
+  'pulada': 'skipped',
+  'erro em': 'error in',
+  'já existe nesta máquina': 'already exists on this machine',
+  // — modal Detalhes / Logs / Nova sessão —
+  'Detalhes da sessão': 'Session details',
+  'Lendo…': 'Reading…',
+  'Falha ao ler os detalhes.': 'Failed to read details.',
+  'Sessão não encontrada.': 'Session not found.',
+  'Retomar': 'Resume',
+  'Logs': 'Logs',
+  'Escolha a pasta e abra uma sessão nova num terminal.': 'Pick the folder and open a new session in a terminal.',
+  'o agente roda lá e a sessão aparece aqui ao atualizar': 'the agent runs there and the session shows up here on refresh',
+  'Usar um workspace (uma sessão com acesso a vários repos)': 'Use a workspace (one session with access to several repos)',
+  'pasta do projeto (ex.: /home/você/projeto)': 'project folder (e.g. /home/you/project)',
+  'Modelo': 'Model',
+  'Effort': 'Effort',
+  'Modo': 'Mode',
+  'Abrir sessão': 'Open session',
+  'padrão do CLI': 'CLI default',
+  'padrão': 'default',
+  '(nenhum workspace — crie na aba Workspaces)': '(no workspace — create one on the Workspaces tab)',
+  'Escolha a <b>pasta-raiz</b> (cwd) da sessão.': 'Choose the session\\'s <b>root folder</b> (cwd).',
+  'As demais entram como --add-dir — uma sessão só, ciente de todos os repos.': 'The rest are added as --add-dir — a single session aware of all repos.',
+  // — modal Nova sessão: modos (segundo elemento dos pares) —
+  'Ask before edits': 'Ask before edits',
+  'Edit automatically': 'Edit automatically',
+  'Plan mode': 'Plan mode',
+  'Auto mode': 'Auto mode',
+  'Ask for approval': 'Ask for approval',
+  'Approve for me': 'Approve for me',
+  'Full access': 'Full access',
+  // — render de sessões: chips, origem, ações —
+  'ativa': 'active',
+  'terminal': 'terminal',
+  'VS Code': 'VS Code',
+  'SDK': 'SDK',
+  'tok': 'tok',
+  'porta': 'port',
+  'abrir ↗': 'open ↗',
+  'auto:': 'auto:',
+  'Workspace:': 'Workspace:',
+  'token válido até': 'token valid until',
+  'Sessão iniciada no': 'Session started in',
+  '— dá pra retomar tanto no terminal quanto no VS Code': '— can be resumed in either the terminal or VS Code',
+  '— clique p/ filtrar por esta pasta': '— click to filter by this folder',
+  'saída (gerados):': 'output (generated):',
+  'entrada:': 'input:',
+  'cache: criação': 'cache: creation',
+  'leitura': 'read',
+  'turnos': 'turns',
+  'Copiar comando pra retomar no terminal': 'Copy command to resume in the terminal',
+  'Renomear': 'Rename',
+  'Confirmar': 'Confirm',
+  'Cancelar': 'Cancel',
+  'comando copiado ✓': 'command copied ✓',
+  'Favoritar': 'Add to favorites',
+  'Desfavoritar': 'Remove from favorites',
+  'Fixar no topo': 'Pin to top',
+  'Abrir no VS Code (pasta + esta conversa na extensão)': 'Open in VS Code (folder + this conversation in the extension)',
+  'Abrir a pasta no VS Code': 'Open the folder in VS Code',
+  'Desarquivar — volta pra lista de ativas': 'Unarchive — back to the active list',
+  'Arquivar — tira da lista (não apaga nada)': 'Archive — remove from the list (deletes nothing)',
+  'Detalhes': 'Details',
+  'Baixar sessão (.json)': 'Download session (.json)',
+  'Lendo sessões…': 'Reading sessions…',
+  'Falha ao ler as sessões.': 'Failed to read sessions.',
+  '· carregando…': '· loading…',
+  '← Ver ativas': '← View active',
+  // — estados vazios das sessões —
+  'Selecione Claude e/ou Codex acima.': 'Select Claude and/or Codex above.',
+  'Nenhuma sessão favoritada.': 'No favorite sessions.',
+  'Nenhuma sessão arquivada.': 'No archived sessions.',
+  'Nenhuma sessão bate com o filtro.': 'No session matches the filter.',
+  'Nenhuma sessão ativa — veja as arquivadas.': 'No active sessions — check the archived ones.',
+  'Nenhuma sessão encontrada.': 'No sessions found.',
+  'limpar filtro': 'clear filter',
+  // — fragmentos compostos no render —
+  'Ver mais': 'View more',
+  'Ver todas': 'View all',
+  'Ver tudo': 'View all',
+  ' arquivadas': ' archived',
+  ' favoritas': ' favorites',
+  // — fmtAgo / unidades de tempo —
+  'agora': 'now',
+  'Reiniciando…': 'Restarting…',
+  // — toasts genéricos / confirmações —
+  'Container parado': 'Container stopped',
+  'Finalizado': 'Stopped',
+  'Falha': 'Failed',
+  'Falha ao reiniciar': 'Failed to restart',
+  'sem seletor — digite o caminho': 'no picker — type the path',
+  'sem seletor': 'no picker',
+  'Esse workspace não tem pastas': 'This workspace has no folders',
+  'Escolha a pasta': 'Pick the folder',
+  'não consegui abrir o terminal': 'could not open the terminal',
+  'Falha ao duplicar': 'Failed to duplicate',
+  'Dê um nome ao workspace': 'Give the workspace a name',
+  'Adicione ao menos uma pasta': 'Add at least one folder',
+  'Falha ao salvar': 'Failed to save',
+  'não consegui salvar': 'could not save',
+  'Informe a pasta e o comando': 'Enter the folder and the command',
+  'Falha ao iniciar': 'Failed to start',
+  'não consegui iniciar': 'could not start',
+  'Esse processo não tem log': 'This process has no log',
+  'o processo saiu logo — veja os logs': 'the process exited right away — check the logs',
+  'Falha ao exportar': 'Failed to export',
+  'não consegui abrir o VS Code': 'could not open VS Code',
+  'Feche a janela com Ctrl+W': 'Close the window with Ctrl+W',
+  // — confirmações (partes fixas) —
+  'Parar este container?': 'Stop this container?',
+  'Finalizar este processo?': 'Stop this process?',
+  'Reiniciar este processo?': 'Restart this process?',
+  'Excluir o workspace': 'Delete the workspace',
+  '(as pastas e sessões não são tocadas)': '(folders and sessions are left untouched)',
+  // — confirmações: exportar com segredos —
+  'Possíveis segredos nesta sessão': 'Possible secrets in this session',
+  'Baixar mesmo assim?': 'Download anyway?',
+  'Baixar mesmo assim': 'Download anyway',
+  // — toasts compostos (partes fixas) —
+  'sessão': 'session',
+  'aberta': 'opened',
+  'repos': 'repos',
+  'iniciado': 'started',
+  'duplicado como': 'duplicated as',
+  'workspace': 'workspace',
+  'salvo': 'saved',
+  'exportada': 'exported',
+  // — detalhes da sessão: rótulos (chaves de r.rows) —
+  'Fonte': 'Source',
+  'Claude Code': 'Claude Code',
+  'Título': 'Title',
+  'Título automático': 'Auto title',
+  'ID': 'ID',
+  'Pasta': 'Folder',
+  'Origem': 'Origin',
+  'Branch git': 'Git branch',
+  'Versão (Claude Code)': 'Version (Claude Code)',
+  'Modelo(s)': 'Model(s)',
+  'Criado': 'Created',
+  'Modificado': 'Modified',
+  '1ª atividade': 'First activity',
+  'Última atividade': 'Last activity',
+  'Mensagens': 'Messages',
+  'Tokens': 'Tokens',
+  'Tamanho': 'Size',
+  'Arquivo': 'File',
+  'Originador': 'Originator',
+  'Versão (Codex CLI)': 'Version (Codex CLI)',
+  // — preview de importação: cabeçalho e prompt pra IA —
+  'esta máquina:': 'this machine:',
+  // — mensagens de erro do servidor (mostradas via r.error em toasts) —
+  'sem seletor de pasta (instale zenity, kdialog ou yad)': 'no folder picker (install zenity, kdialog or yad)',
+  'falha ao abrir o seletor': 'failed to open the picker',
+  'host não permitido': 'host not allowed',
+  'origem não permitida': 'origin not allowed',
+  'id inválido': 'invalid id',
+  'folder requerido': 'folder required',
+  'VS Code (\`code\`) não encontrado no PATH': 'VS Code (\`code\`) not found in PATH',
+  'arquivo de importação inválido': 'invalid import file',
+  'caminho inseguro no bundle (rejeitado)': 'unsafe path in bundle (rejected)',
+  'id e flag (fav|pin) requeridos': 'id and flag (fav|pin) required',
+  'id requerido': 'id required',
+  'container inválido': 'invalid container',
+  'docker indisponível (não consegui parar o container)': 'docker unavailable (could not stop the container)',
+  'porta inválida': 'invalid port',
+  'não consegui matar pela porta (precisa do \`fuser\`, pacote psmisc)': 'could not kill by port (needs \`fuser\`, package psmisc)',
+  'pid inválido': 'invalid pid',
+  'pid não é um processo gerenciado': 'pid is not a managed process',
+  'pid|port|container requerido': 'pid|port|container required',
+  'comando requerido': 'command required',
+  'pasta inexistente': 'folder does not exist',
+  'nome e ao menos uma pasta válida são necessários': 'a name and at least one valid folder are required',
+  'workspace vazio': 'empty workspace',
+  'pasta do processo desconhecida': 'unknown process folder',
+  // — blocos rich (data-i18n): a CHAVE é o innerHTML PT exato (trim); o VALOR é o innerHTML EN com as mesmas tags —
+  'Agrupe pastas de projetos (ex.: <code>admin</code>, <code>dashboard</code>, <code>api</code>). Depois dá pra abrir tudo no VS Code de uma vez, criar sessões em qualquer pasta dele e filtrar as Sessões por workspace.':
+    'Group project folders (e.g. <code>admin</code>, <code>dashboard</code>, <code>api</code>). Then you can open everything in VS Code at once, create sessions in any of its folders and filter Sessions by workspace.',
+  'Preview do que vai mudar (home, cwd, pasta codificada) — nada é escrito até você <b>Aplicar</b>. Apontamentos que o remap automático não cobre aparecem pra você <b>ignorar</b> ou ajustar.':
+    'Preview of what will change (home, cwd, encoded folder) — nothing is written until you <b>Apply</b>. Paths the automatic remap does not cover show up for you to <b>ignore</b> or adjust.',
+  'Dê um nome e escolha as pastas do grupo. Use o <b>+ adicionar pasta</b> pra incluir mais de uma.':
+    'Give it a name and pick the group folders. Use <b>+ add folder</b> to include more than one.',
+  '<b>Sessões.</b> Lista as sessões do <b>Claude Code</b> (<code>~/.claude/projects</code>) e do <b>Codex</b> (<code>~/.codex/sessions</code>) — ligue as fontes (Claude/Codex) e clique em <b>Atualizar</b>. Cada sessão mostra pasta, origem (terminal/VS Code), tokens, se está <b>● ativa</b> e um trecho da última mensagem. Filtre por título/pasta (atalho <code>/</code>), clique no chip da pasta pra filtrar por projeto, e <b>Enter</b> retoma a 1ª. Ícones do card (passe o mouse): abrir no <b>VS Code</b> (pasta + a conversa na extensão), <b>retomar</b> (copia <code>claude --resume</code> / <code>codex resume</code> pro terminal), <b>★ favoritar</b>, <b>📌 fixar</b>, <b>⋮</b> (detalhes da sessão e baixar o <code>.json</code>) e <b>arquivar</b> (só organiza a visão, nada é apagado). Renomear é inline (lápis). A lista mostra 20 por vez (<b>Ver mais</b>/<b>Ver todas</b>). O botão <b>Importar</b> (topo) carrega um <code>.json</code> exportado com preview de remap. O acento muda com as fontes: só Claude = laranja, só Codex = verde, ambos/nenhum = azul.':
+    '<b>Sessions.</b> Lists the <b>Claude Code</b> (<code>~/.claude/projects</code>) and <b>Codex</b> (<code>~/.codex/sessions</code>) sessions — turn on the sources (Claude/Codex) and click <b>Refresh</b>. Each session shows folder, origin (terminal/VS Code), tokens, whether it is <b>● active</b> and a snippet of the last message. Filter by title/folder (shortcut <code>/</code>), click the folder chip to filter by project, and <b>Enter</b> resumes the first. Card icons (hover): open in <b>VS Code</b> (folder + the conversation in the extension), <b>resume</b> (copies <code>claude --resume</code> / <code>codex resume</code> to the terminal), <b>★ favorite</b>, <b>📌 pin</b>, <b>⋮</b> (session details and download the <code>.json</code>) and <b>archive</b> (just tidies the view, nothing is deleted). Renaming is inline (pencil). The list shows 20 at a time (<b>View more</b>/<b>View all</b>). The <b>Import</b> button (top) loads an exported <code>.json</code> with a remap preview. The accent follows the sources: Claude only = orange, Codex only = green, both/neither = blue.',
+  '<b>Processos.</b> Lista o que ficou rodando em background (dev servers iniciados pelo Claude + os iniciados aqui), com a pasta de cada um; atualiza a cada 2,5s na aba. Dá pra <b>Iniciar</b> um processo (escolhendo a pasta no seletor do sistema 📁 e o comando), ver o <b>histórico</b> 🕐 dos iniciados (com pin e re-iniciar), <b>Reiniciar</b> ou <b>Finalizar</b> (mata o processo e os filhos com SIGTERM). Também para <b>containers Docker</b>.':
+    '<b>Processes.</b> Lists what stayed running in the background (dev servers started by Claude + the ones started here), with each one\\'s folder; refreshes every 2.5s on the tab. You can <b>Start</b> a process (picking the folder in the system picker 📁 and the command), view the <b>history</b> 🕐 of started ones (with pin and re-run), <b>Restart</b> or <b>Stop</b> (kills the process and its children with SIGTERM). It also stops <b>Docker containers</b>.',
+  'No topo, os chips mostram a conta logada (Claude/Codex). Tudo é local em <code>127.0.0.1</code>: só lê e mata na sua máquina, e nenhum token de login é exposto.':
+    'At the top, the chips show the signed-in account (Claude/Codex). Everything is local on <code>127.0.0.1</code>: it only reads and kills on your machine, and no login token is exposed.',
+};
+let LANG = localStorage.getItem('agentdeck-lang') === 'pt' ? 'pt' : 'en';
+const t = (s) => (LANG === 'en' && I18N[s] != null) ? I18N[s] : s;
+function i18nWalk(root) {
+  root.querySelectorAll('[title]').forEach(el => {
+    if (el.dataset.t0 == null) el.dataset.t0 = el.getAttribute('title');
+    el.setAttribute('title', t(el.dataset.t0));
+  });
+  root.querySelectorAll('[placeholder]').forEach(el => {
+    if (el.dataset.p0 == null) el.dataset.p0 = el.getAttribute('placeholder');
+    el.setAttribute('placeholder', t(el.dataset.p0));
+  });
+  root.querySelectorAll('[data-i18n]').forEach(el => {
+    if (el.dataset.h0 == null) el.dataset.h0 = el.innerHTML.trim();
+    el.innerHTML = t(el.dataset.h0);
+  });
+  const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  const nodes = []; let n; while (n = tw.nextNode()) nodes.push(n);
+  nodes.forEach(node => {
+    const p = node.parentElement;
+    if (!p || p.children.length) return;            // só nós-folha (evita fragmentar rich text)
+    if (p.hasAttribute('data-i18n')) return;
+    const key = node.nodeValue.trim();
+    if (!key) return;
+    if (node.__raw == null) { node.__raw = node.nodeValue; node.__key = key; }
+    node.nodeValue = node.__raw.replace(node.__key, t(node.__key));
+  });
+}
+function applyLang() {
+  document.documentElement.lang = LANG === 'pt' ? 'pt-BR' : 'en';
+  i18nWalk(document.body);
+  const b = document.getElementById('lang-btn'); if (b) b.textContent = LANG === 'pt' ? 'EN' : 'PT';
+  document.body.style.visibility = 'visible';
+}
+function toggleLang() {
+  LANG = LANG === 'pt' ? 'en' : 'pt';
+  localStorage.setItem('agentdeck-lang', LANG);
+  applyLang();
+  try { renderSessions(); } catch (e) {}
+  try { renderWorkspaces(); } catch (e) {}
+  try { refresh(); } catch (e) {}
+}
+
 const folderName = (p) => { const a = String(p || '').split('/').filter(Boolean); return a[a.length - 1] || ''; }; // nome da pasta final
 
 // notificação discreta que some sozinha (substitui avisos transitórios)
@@ -1803,7 +2106,7 @@ function askConfirm(message, opts) {
     const bg = document.getElementById('confirm-modal');
     const ok = document.getElementById('confirm-ok'), cancel = document.getElementById('confirm-cancel');
     document.getElementById('confirm-msg').textContent = message;
-    ok.textContent = opts.okLabel || 'Confirmar';
+    ok.textContent = opts.okLabel || t('Confirmar');
     ok.className = 'btn ' + (opts.danger ? 'btn-kill' : 'btn-copy');
     bg.classList.add('open');
     setTimeout(() => ok.focus(), 0);
@@ -1828,21 +2131,21 @@ function askConfirm(message, opts) {
 async function kill(payload, cmd, cwd) {
   const isContainer = payload && payload.container;
   const msg = isContainer
-    ? 'Parar este container?\\n\\n' + payload.container
-    : 'Finalizar este processo?\\n\\n' + cmd + (cwd ? '\\n' + cwd : '');
-  if (!(await askConfirm(msg, { danger: true, okLabel: isContainer ? 'Parar' : 'Finalizar' }))) return;
+    ? t('Parar este container?') + '\\n\\n' + payload.container
+    : t('Finalizar este processo?') + '\\n\\n' + cmd + (cwd ? '\\n' + cwd : '');
+  if (!(await askConfirm(msg, { danger: true, okLabel: isContainer ? t('Parar') : t('Finalizar') }))) return;
   try {
     const r = await (await fetch('/api/kill', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) })).json();
-    if (r && r.ok) toast(isContainer ? 'Container parado' : 'Finalizado', 'ok');
-    else toast(r && r.error ? r.error : 'Falha', 'err');
-  } catch { toast('Falha', 'err'); }
+    if (r && r.ok) toast(isContainer ? t('Container parado') : t('Finalizado'), 'ok');
+    else toast(r && r.error ? t(r.error) : t('Falha'), 'err');
+  } catch { toast(t('Falha'), 'err'); }
   setTimeout(refresh, 400);
 }
 
 async function restartProc(pid, cmd, cwd) {
-  const msg = 'Reiniciar este processo?\\n\\n' + cmd + (cwd ? '\\n' + cwd : '');
-  if (!(await askConfirm(msg, { okLabel: 'Reiniciar' }))) return;
-  try { await fetch('/api/restart', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pid }) }); toast('Reiniciando…', 'ok'); } catch { toast('Falha ao reiniciar', 'err'); }
+  const msg = t('Reiniciar este processo?') + '\\n\\n' + cmd + (cwd ? '\\n' + cwd : '');
+  if (!(await askConfirm(msg, { okLabel: t('Reiniciar') }))) return;
+  try { await fetch('/api/restart', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ pid }) }); toast(t('Reiniciando…'), 'ok'); } catch { toast(t('Falha ao reiniciar'), 'err'); }
   setTimeout(refresh, 1000); // dá tempo de matar e subir de novo
 }
 
@@ -1851,7 +2154,7 @@ async function pickFolder(inputId) {
   let r; try { r = await (await fetch('/api/pick-folder', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' })).json(); }
   catch { return; }
   if (r.ok && r.path) document.getElementById(inputId).value = r.path;
-  else if (!r.ok) toast(r.error || 'sem seletor — digite o caminho', 'err');
+  else if (!r.ok) toast(r.error ? t(r.error) : t('sem seletor — digite o caminho'), 'err');
 }
 
 // ── Nova sessão (modal do "+") ──
@@ -1876,9 +2179,9 @@ function nsSetAgent(a) {
   document.getElementById('ns-ag-codex').classList.toggle('active', nsAgent === 'codex');
   const opts = (list, label) => '<option value="">' + label + '</option>' + list.map(x => '<option value="' + x + '">' + x + '</option>').join('');
   const optsPairs = (pairs, label) => '<option value="">' + label + '</option>' + pairs.map(p => '<option value="' + p[0] + '">' + p[1] + '</option>').join('');
-  document.getElementById('ns-model').innerHTML = opts(NS_MODELS[nsAgent], 'padrão do CLI');
-  document.getElementById('ns-effort').innerHTML = opts(NS_EFFORTS[nsAgent], 'padrão');
-  document.getElementById('ns-mode').innerHTML = optsPairs(NS_MODES[nsAgent], 'padrão');
+  document.getElementById('ns-model').innerHTML = opts(NS_MODELS[nsAgent], t('padrão do CLI'));
+  document.getElementById('ns-effort').innerHTML = opts(NS_EFFORTS[nsAgent], t('padrão'));
+  document.getElementById('ns-mode').innerHTML = optsPairs(NS_MODES[nsAgent].map(p => [p[0], t(p[1])]), t('padrão'));
   document.getElementById('ns-go').className = 'btn ' + (nsAgent === 'codex' ? 'ns-codex' : 'ns-claude');
 }
 function nsToggleWs() {
@@ -1887,7 +2190,7 @@ function nsToggleWs() {
   document.getElementById('ns-ws-area').style.display = on ? '' : 'none';
   if (on) {
     const sel = document.getElementById('ns-ws-select');
-    sel.innerHTML = WS.length ? WS.map(w => '<option>' + esc(w.name) + '</option>').join('') : '<option value="">(nenhum workspace — crie na aba Workspaces)</option>';
+    sel.innerHTML = WS.length ? WS.map(w => '<option>' + esc(w.name) + '</option>').join('') : '<option value="">' + t('(nenhum workspace — crie na aba Workspaces)') + '</option>';
     nsRenderWsFolders();
   }
 }
@@ -1896,7 +2199,7 @@ function nsRenderWsFolders() {
   const w = WS.find(x => x.name === name);
   const fs = w ? w.folders : [];
   const head = fs.length > 1
-    ? '<div class="hint">Escolha a <b>pasta-raiz</b> (cwd) da sessão.<span class="info-i" title="As demais entram como --add-dir — uma sessão só, ciente de todos os repos."><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span></div>'
+    ? '<div class="hint">' + t('Escolha a <b>pasta-raiz</b> (cwd) da sessão.') + '<span class="info-i" title="' + esc(t('As demais entram como --add-dir — uma sessão só, ciente de todos os repos.')) + '"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span></div>'
     : '';
   document.getElementById('ns-ws-folders').innerHTML = head + fs.map((f, i) =>
     '<label><input type="radio" name="ns-root" value="' + esc(f) + '"' + (i === 0 ? ' checked' : '') + ' /> <span class="mono">' + esc(f) + '</span></label>').join('');
@@ -1906,13 +2209,13 @@ async function createSession(source) {
   let folder, addDirs = [];
   if (document.getElementById('ns-ws-toggle').checked) {
     const all = [...document.querySelectorAll('#ns-ws-folders input[name="ns-root"]')].map(r => r.value);
-    if (!all.length) { toast('Esse workspace não tem pastas', 'err'); return; }
+    if (!all.length) { toast(t('Esse workspace não tem pastas'), 'err'); return; }
     const picked = document.querySelector('#ns-ws-folders input[name="ns-root"]:checked');
     folder = picked ? picked.value : all[0];          // raiz (cwd)
     addDirs = all.filter(f => f !== folder);          // demais repos → --add-dir
   } else {
     folder = document.getElementById('ns-folder').value.trim();
-    if (!folder) { toast('Escolha a pasta', 'err'); return; }
+    if (!folder) { toast(t('Escolha a pasta'), 'err'); return; }
   }
   const model = document.getElementById('ns-model').value.trim();
   const effort = document.getElementById('ns-effort').value;
@@ -1920,9 +2223,9 @@ async function createSession(source) {
   let r; try { r = await (await fetch('/api/new-session', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ source, folder, addDirs, model, effort, mode }) })).json(); } catch {}
   if (r && r.ok) {
     const label = source === 'codex' ? 'Codex' : 'Claude';
-    toast(addDirs.length ? '✓ sessão ' + label + ' aberta (' + (addDirs.length + 1) + ' repos)' : '✓ sessão ' + label + ' aberta', 'ok');
+    toast(addDirs.length ? '✓ ' + t('sessão') + ' ' + label + ' ' + t('aberta') + ' (' + (addDirs.length + 1) + ' ' + t('repos') + ')' : '✓ ' + t('sessão') + ' ' + label + ' ' + t('aberta'), 'ok');
     closeNewSession();
-  } else toast('não consegui abrir o terminal', 'err');
+  } else toast(t('não consegui abrir o terminal'), 'err');
 }
 
 // ── Workspaces (aba) ──
@@ -1935,9 +2238,9 @@ async function loadWorkspaces() {
 function wsAddFolder(value) {
   const row = document.createElement('div');
   row.className = 'ws-frow';
-  row.innerHTML = '<input class="filter ws-folder" placeholder="pasta…" />'
-    + '<button class="btn btn-ghost btn-icon" title="Escolher pasta" onclick="pickWsRow(this)"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>'
-    + '<button class="btn btn-ghost btn-icon" title="Remover" onclick="this.closest(\\'.ws-frow\\').remove()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>';
+  row.innerHTML = '<input class="filter ws-folder" placeholder="' + esc(t('pasta…')) + '" />'
+    + '<button class="btn btn-ghost btn-icon" title="' + esc(t('Escolher pasta')) + '" onclick="pickWsRow(this)"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>'
+    + '<button class="btn btn-ghost btn-icon" title="' + esc(t('Remover')) + '" onclick="this.closest(\\'.ws-frow\\').remove()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>';
   if (value) row.querySelector('.ws-folder').value = value;
   document.getElementById('ws-folders').appendChild(row);
 }
@@ -1945,8 +2248,8 @@ function resetWsForm() {
   wsEditing = null;
   document.getElementById('ws-name').value = '';
   document.getElementById('ws-folders').innerHTML = ''; wsAddFolder();
-  document.getElementById('ws-modal-title').textContent = 'Novo workspace';
-  document.getElementById('ws-save-btn').textContent = 'Criar workspace';
+  document.getElementById('ws-modal-title').textContent = t('Novo workspace');
+  document.getElementById('ws-save-btn').textContent = t('Criar workspace');
 }
 function openWsModal() {
   resetWsForm();
@@ -1964,8 +2267,8 @@ async function duplicateWorkspace(name) {
   const w = WS.find(x => x.name === name); if (!w) return;
   const novo = uniqueCopyName(w.name);
   try { await fetch('/api/workspaces', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ name: novo, folders: w.folders }) }); }
-  catch { toast('Falha ao duplicar', 'err'); return; }
-  toast('✓ duplicado como "' + novo + '"', 'ok');
+  catch { toast(t('Falha ao duplicar'), 'err'); return; }
+  toast('✓ ' + t('duplicado como') + ' "' + novo + '"', 'ok');
   await loadWorkspaces();
   editWorkspace(novo); // já abre a cópia em edição pra você remover/ajustar pastas
 }
@@ -1975,41 +2278,41 @@ function editWorkspace(name) {
   document.getElementById('ws-name').value = w.name;
   document.getElementById('ws-folders').innerHTML = '';
   w.folders.forEach(f => wsAddFolder(f));
-  document.getElementById('ws-modal-title').innerHTML = 'Editar workspace <span class="sub">' + esc(w.name) + '</span>';
-  document.getElementById('ws-save-btn').textContent = 'Salvar alterações';
+  document.getElementById('ws-modal-title').innerHTML = t('Editar workspace') + ' <span class="sub">' + esc(w.name) + '</span>';
+  document.getElementById('ws-save-btn').textContent = t('Salvar alterações');
   document.getElementById('ws-modal').classList.add('open');
   setTimeout(() => document.getElementById('ws-name').focus(), 0);
 }
 async function pickWsRow(btn) {
   let r; try { r = await (await fetch('/api/pick-folder', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' })).json(); } catch { return; }
   if (r.ok && r.path) btn.closest('.ws-frow').querySelector('.ws-folder').value = r.path;
-  else if (!r.ok) toast(r.error || 'sem seletor', 'err');
+  else if (!r.ok) toast(r.error ? t(r.error) : t('sem seletor'), 'err');
 }
 async function createWorkspace() {
   const name = document.getElementById('ws-name').value.trim();
   const folders = [...document.querySelectorAll('#ws-folders .ws-folder')].map(i => i.value.trim()).filter(Boolean);
-  if (!name) { toast('Dê um nome ao workspace', 'err'); return; }
-  if (!folders.length) { toast('Adicione ao menos uma pasta', 'err'); return; }
+  if (!name) { toast(t('Dê um nome ao workspace'), 'err'); return; }
+  if (!folders.length) { toast(t('Adicione ao menos uma pasta'), 'err'); return; }
   let r; try { r = await (await fetch('/api/workspaces', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ name, folders }) })).json(); }
-  catch { toast('Falha ao salvar', 'err'); return; }
-  if (!r.ok) { toast(r.error || 'não consegui salvar', 'err'); return; }
+  catch { toast(t('Falha ao salvar'), 'err'); return; }
+  if (!r.ok) { toast(r.error ? t(r.error) : t('não consegui salvar'), 'err'); return; }
   // se estava editando e renomeou, remove o original (senão upsert por nome cria um 2º)
   if (wsEditing && wsEditing !== name) { try { await fetch('/api/workspaces/delete', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ name: wsEditing }) }); } catch {} }
-  toast('✓ workspace "' + name + '" salvo', 'ok');
+  toast('✓ ' + t('workspace') + ' "' + name + '" ' + t('salvo'), 'ok');
   closeWsModal();
   loadWorkspaces();
 }
 function renderWorkspaces() {
   const box = document.getElementById('ws-list');
-  if (!WS.length) { box.innerHTML = '<div class="empty">Nenhum workspace ainda — crie um acima.</div>'; return; }
+  if (!WS.length) { box.innerHTML = '<div class="empty">' + t('Nenhum workspace ainda — crie um acima.') + '</div>'; return; }
   box.innerHTML = WS.map(w => { const n = esc(JSON.stringify(w.name)); return \`
     <div class="card ws">
       <div class="kebab-wrap ws-kebab">
-        <button class="btn btn-icon btn-kebab" title="Mais ações" onclick='toggleMenu(event, this)'><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+        <button class="btn btn-icon btn-kebab" title="\${esc(t('Mais ações'))}" onclick='toggleMenu(event, this)'><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
         <div class="menu">
-          <button class="menu-item" onclick='duplicateWorkspace(\${n}); closeMenus()'><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Duplicar</button>
-          <button class="menu-item" onclick='editWorkspace(\${n}); closeMenus()'><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Editar</button>
-          <button class="menu-item" onclick='deleteWorkspaceUI(\${n}); closeMenus()'><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg> Excluir</button>
+          <button class="menu-item" onclick='duplicateWorkspace(\${n}); closeMenus()'><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> \${t('Duplicar')}</button>
+          <button class="menu-item" onclick='editWorkspace(\${n}); closeMenus()'><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> \${t('Editar')}</button>
+          <button class="menu-item" onclick='deleteWorkspaceUI(\${n}); closeMenus()'><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg> \${t('Excluir')}</button>
         </div>
       </div>
       <div class="main">
@@ -2017,21 +2320,21 @@ function renderWorkspaces() {
         <div class="meta">\${w.folders.map(f => \`<span class="chip folder" title="\${esc(f)}">\${esc(folderName(f))}</span>\`).join('')}</div>
       </div>
       <div class="actions">
-        <button class="btn btn-vscode btn-icon" title="Abrir tudo no VS Code" onclick='openWorkspaceVSCode(\${n})'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
-        <button class="btn btn-ghost" onclick='newSessionForWorkspace(\${n})'>Nova sessão</button>
-        <button class="btn btn-ghost" onclick='filterByWorkspace(\${n})'>Filtrar sessões</button>
+        <button class="btn btn-vscode btn-icon" title="\${esc(t('Abrir tudo no VS Code'))}" onclick='openWorkspaceVSCode(\${n})'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
+        <button class="btn btn-ghost" onclick='newSessionForWorkspace(\${n})'>\${t('Nova sessão')}</button>
+        <button class="btn btn-ghost" onclick='filterByWorkspace(\${n})'>\${t('Filtrar sessões')}</button>
       </div>
     </div>\`; }).join('');
 }
 async function openWorkspaceVSCode(name) {
   try {
     const r = await (await fetch('/api/open-workspace', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ name }) })).json();
-    if (r && r.ok) toast('Abrindo no VS Code…', 'ok');
-    else toast(r && r.error ? r.error : 'Falha', 'err');
-  } catch { toast('Falha', 'err'); }
+    if (r && r.ok) toast(t('Abrindo no VS Code…'), 'ok');
+    else toast(r && r.error ? t(r.error) : t('Falha'), 'err');
+  } catch { toast(t('Falha'), 'err'); }
 }
 async function deleteWorkspaceUI(name) {
-  if (!(await askConfirm('Excluir o workspace "' + name + '"?\\n\\n(as pastas e sessões não são tocadas)', { danger: true, okLabel: 'Excluir' }))) return;
+  if (!(await askConfirm(t('Excluir o workspace') + ' "' + name + '"?\\n\\n' + t('(as pastas e sessões não são tocadas)'), { danger: true, okLabel: t('Excluir') }))) return;
   try { await fetch('/api/workspaces/delete', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ name }) }); } catch {}
   loadWorkspaces();
 }
@@ -2051,11 +2354,11 @@ function clearWsFilter() { wsFilter = null; renderSessions(); }
 async function startProc() {
   const folder = document.getElementById('run-folder').value.trim();
   const cmd = document.getElementById('run-cmd').value.trim();
-  if (!folder || !cmd) { toast('Informe a pasta e o comando', 'err'); return; }
+  if (!folder || !cmd) { toast(t('Informe a pasta e o comando'), 'err'); return; }
   let r; try { r = await (await fetch('/api/run', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ cmd, folder }) })).json(); }
-  catch { toast('Falha ao iniciar', 'err'); return; }
-  if (!r.ok) { toast(r.error || 'não consegui iniciar', 'err'); return; }
-  toast('✓ ' + cmd + ' iniciado', 'ok');
+  catch { toast(t('Falha ao iniciar'), 'err'); return; }
+  if (!r.ok) { toast(r.error ? t(r.error) : t('não consegui iniciar'), 'err'); return; }
+  toast('✓ ' + cmd + ' ' + t('iniciado'), 'ok');
   document.getElementById('run-cmd').value = '';
   refresh();
   checkAlive(cmd, folder, r.log);
@@ -2077,10 +2380,10 @@ async function fetchLog() {
   } catch {}
 }
 async function openLog(path, title) {
-  if (!path) { toast('Esse processo não tem log', 'err'); return; }
+  if (!path) { toast(t('Esse processo não tem log'), 'err'); return; }
   logPath = path;
   document.getElementById('log-title').textContent = title || '';
-  document.getElementById('log-body').textContent = 'Lendo…';
+  document.getElementById('log-body').textContent = t('Lendo…');
   document.getElementById('log-modal').classList.add('open');
   await fetchLog();
   document.getElementById('log-body').scrollTop = document.getElementById('log-body').scrollHeight;
@@ -2097,33 +2400,33 @@ let HIST = [], histAll = false;
 function closeHistory() { document.getElementById('hist-modal').classList.remove('open'); }
 async function openHistory() {
   const m = document.getElementById('hist-modal'), body = document.getElementById('hist-body');
-  histAll = false; m.classList.add('open'); body.innerHTML = '<div class="empty">Carregando…</div>';
+  histAll = false; m.classList.add('open'); body.innerHTML = '<div class="empty">' + t('Carregando…') + '</div>';
   try { HIST = (await (await fetch('/api/history')).json()).items || []; }
-  catch { body.innerHTML = '<div class="warn">Falha ao ler o histórico.</div>'; return; }
+  catch { body.innerHTML = '<div class="warn">' + t('Falha ao ler o histórico.') + '</div>'; return; }
   renderHistory();
 }
 function histShowAll() { histAll = true; renderHistory(); }
 function renderHistory() {
   const body = document.getElementById('hist-body');
-  if (!HIST.length) { body.innerHTML = '<div class="empty">Nenhum processo iniciado ainda.</div>'; return; }
+  if (!HIST.length) { body.innerHTML = '<div class="empty">' + t('Nenhum processo iniciado ainda.') + '</div>'; return; }
   const list = histAll ? HIST : HIST.slice(0, 15);
   body.innerHTML = '<div class="hist-list' + (histAll ? ' scroll' : '') + '">' + list.map(h => \`
     <div class="hist-row">
-      <button class="btn btn-icon btn-pin\${h.pinned ? ' on' : ''}" title="\${h.pinned ? 'Desafixar' : 'Fixar'}" onclick='pinHistory(\${esc(JSON.stringify(h.cmd))}, \${esc(JSON.stringify(h.folder))}, \${!h.pinned})'><svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></button>
+      <button class="btn btn-icon btn-pin\${h.pinned ? ' on' : ''}" title="\${h.pinned ? esc(t('Desafixar')) : esc(t('Fixar'))}" onclick='pinHistory(\${esc(JSON.stringify(h.cmd))}, \${esc(JSON.stringify(h.folder))}, \${!h.pinned})'><svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></button>
       <div class="hist-main">
         <div class="hist-cmd">\${esc(h.cmd)}</div>
         <div class="hist-folder" title="\${esc(h.folder)}">\${esc(h.folder)}</div>
       </div>
-      \${h.log ? \`<button class="btn btn-ghost btn-icon" title="Ver logs da última execução" onclick='openLog(\${esc(JSON.stringify(h.log))}, \${esc(JSON.stringify(folderName(h.folder)))})'><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M7 8h10M7 12h10M7 16h6"/></svg></button>\` : ''}
-      <button class="btn btn-play btn-icon" title="Iniciar de novo" onclick='startFromHistory(\${esc(JSON.stringify(h.cmd))}, \${esc(JSON.stringify(h.folder))})'><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></svg></button>
+      \${h.log ? \`<button class="btn btn-ghost btn-icon" title="\${esc(t('Ver logs da última execução'))}" onclick='openLog(\${esc(JSON.stringify(h.log))}, \${esc(JSON.stringify(folderName(h.folder)))})'><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M7 8h10M7 12h10M7 16h6"/></svg></button>\` : ''}
+      <button class="btn btn-play btn-icon" title="\${esc(t('Iniciar de novo'))}" onclick='startFromHistory(\${esc(JSON.stringify(h.cmd))}, \${esc(JSON.stringify(h.folder))})'><svg viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></svg></button>
     </div>\`).join('') + '</div>'
-    + (!histAll && HIST.length > 15 ? '<div class="loadmore"><button class="btn btn-ghost" onclick="histShowAll()">Ver tudo (' + HIST.length + ')</button></div>' : '');
+    + (!histAll && HIST.length > 15 ? '<div class="loadmore"><button class="btn btn-ghost" onclick="histShowAll()">' + t('Ver tudo') + ' (' + HIST.length + ')</button></div>' : '');
 }
 async function startFromHistory(cmd, folder) {
   let r; try { r = await (await fetch('/api/run', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ cmd, folder }) })).json(); }
-  catch { toast('Falha ao iniciar', 'err'); return; }
-  if (!r.ok) { toast(r.error || 'não consegui iniciar', 'err'); return; }
-  toast('✓ ' + cmd + ' iniciado', 'ok');
+  catch { toast(t('Falha ao iniciar'), 'err'); return; }
+  if (!r.ok) { toast(r.error ? t(r.error) : t('não consegui iniciar'), 'err'); return; }
+  toast('✓ ' + cmd + ' ' + t('iniciado'), 'ok');
   closeHistory();
   refresh();
   checkAlive(cmd, folder, r.log);
@@ -2136,7 +2439,7 @@ function checkAlive(cmd, folder, log) {
   setTimeout(async () => {
     let d; try { d = await (await fetch('/api/state')).json(); } catch { return; }
     const alive = (d.tasks || []).some(t => t.cmd === cmd && norm(t.cwd) === norm(folder));
-    if (!alive) { toast('o processo saiu logo — veja os logs', 'err'); openLog(log, cmd); }
+    if (!alive) { toast(t('o processo saiu logo — veja os logs'), 'err'); openLog(log, cmd); }
   }, 1600);
 }
 async function pinHistory(cmd, folder, on) {
@@ -2160,7 +2463,7 @@ function closePanel() {
   // (reabra depois pelo ícone do AgentDeck, que sobe o servidor de novo)
   window.close();
   // se o navegador bloquear o close (aba normal, não janela --app), dá a dica
-  setTimeout(() => toast('Feche a janela com Ctrl+W', 'err'), 250);
+  setTimeout(() => toast(t('Feche a janela com Ctrl+W'), 'err'), 250);
 }
 
 async function refresh() {
@@ -2181,25 +2484,25 @@ async function refresh() {
           <span class="chip pid">PID \${x.pid}</span>
           <span class="chip up">▲ \${fmtUp(x.etimes)}</span>
           \${x.cwd ? \`<span class="chip folder" title="\${esc(x.cwd)}">\${esc(x.cwd)}</span>\` : ''}
-          \${x.port ? \`<span class="chip port">porta \${x.port}</span> <a class="open" href="http://localhost:\${x.port}" target="_blank">abrir ↗</a>\` : ''}
+          \${x.port ? \`<span class="chip port">\${t('porta')} \${x.port}</span> <a class="open" href="http://localhost:\${x.port}" target="_blank">\${t('abrir ↗')}</a>\` : ''}
         </div>
       </div>
       <div class="actions">
-        \${x.log ? \`<button class="btn btn-ghost btn-icon" title="Ver logs" onclick='openLog(\${esc(JSON.stringify(x.log))}, \${esc(JSON.stringify(folderName(x.cwd) || x.cmd))})'><svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M4 4h16v16H4z" opacity="0"/><path d="M7 8h10M7 12h10M7 16h6"/></svg></button>\` : ''}
-        <button class="btn btn-ghost" onclick='restartProc(\${x.pid}, \${JSON.stringify(x.cmd)}, \${JSON.stringify(x.cwd||'')})'>Reiniciar</button>
-        <button class="btn btn-kill" onclick='kill(\${JSON.stringify({pid:x.pid})}, \${JSON.stringify(x.cmd)}, \${JSON.stringify(x.cwd||'')})'>Finalizar</button>
+        \${x.log ? \`<button class="btn btn-ghost btn-icon" title="\${esc(t('Ver logs'))}" onclick='openLog(\${esc(JSON.stringify(x.log))}, \${esc(JSON.stringify(folderName(x.cwd) || x.cmd))})'><svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M4 4h16v16H4z" opacity="0"/><path d="M7 8h10M7 12h10M7 16h6"/></svg></button>\` : ''}
+        <button class="btn btn-ghost" onclick='restartProc(\${x.pid}, \${JSON.stringify(x.cmd)}, \${JSON.stringify(x.cwd||'')})'>\${t('Reiniciar')}</button>
+        <button class="btn btn-kill" onclick='kill(\${JSON.stringify({pid:x.pid})}, \${JSON.stringify(x.cmd)}, \${JSON.stringify(x.cwd||'')})'>\${t('Finalizar')}</button>
       </div>
-    </div>\`).join('') : '<div class="empty">Nada rodando em background agora.</div>';
+    </div>\`).join('') : '<div class="empty">' + t('Nada rodando em background agora.') + '</div>';
 
   const c = document.getElementById('containers');
   c.innerHTML = data.containers.length ? data.containers.map(x => \`
     <div class="card">
       <div class="main">
         <div class="cmd">\${esc(x.name)}</div>
-        <div class="meta"><span class="chip">Docker</span>\${x.ports ? \`<span class="chip">\${esc(x.ports)}</span>\` : ''}<span class="chip up">\${esc(x.status)}</span></div>
+        <div class="meta"><span class="chip">\${t('Docker')}</span>\${x.ports ? \`<span class="chip">\${esc(x.ports)}</span>\` : ''}<span class="chip up">\${esc(x.status)}</span></div>
       </div>
-      <button class="btn btn-kill" onclick='kill(\${JSON.stringify({container:x.name})}, \${JSON.stringify("container "+x.name)})'>Parar</button>
-    </div>\`).join('') : '<div class="empty">Nenhum container Docker ativo.</div>';
+      <button class="btn btn-kill" onclick='kill(\${JSON.stringify({container:x.name})}, \${JSON.stringify("container "+x.name)})'>\${t('Parar')}</button>
+    </div>\`).join('') : '<div class="empty">' + t('Nenhum container Docker ativo.') + '</div>';
 }
 // ── Poll dos Processos: 2,5s na aba Processos; 20s em segundo plano (mantém o
 // badge/relógio do cabeçalho frescos sem martelar ps+ss+docker); pausa se oculto.
@@ -2227,16 +2530,16 @@ function closeInfo() { document.getElementById('info-modal').classList.remove('o
 async function sessionDetails(id, source) {
   const m = document.getElementById('info-modal'), body = document.getElementById('info-body');
   m.classList.add('open');
-  body.innerHTML = '<div class="empty">Lendo…</div>';
+  body.innerHTML = '<div class="empty">' + t('Lendo…') + '</div>';
   let r;
   try { r = await (await fetch('/api/session-info?source=' + encodeURIComponent(source) + '&id=' + encodeURIComponent(id))).json(); }
-  catch { body.innerHTML = '<div class="warn">Falha ao ler os detalhes.</div>'; return; }
-  if (!r || !r.ok) { body.innerHTML = '<div class="warn">Sessão não encontrada.</div>'; return; }
+  catch { body.innerHTML = '<div class="warn">' + t('Falha ao ler os detalhes.') + '</div>'; return; }
+  if (!r || !r.ok) { body.innerHTML = '<div class="warn">' + t('Sessão não encontrada.') + '</div>'; return; }
   const rows = (r.rows || []).map(row => {
     const mono = /Arquivo|Pasta|^ID$/.test(row.k) ? ' mono' : '';
-    return '<div class="info-row"><span class="info-k">' + esc(row.k) + '</span><span class="info-v' + mono + '">' + esc(row.v) + '</span></div>';
+    return '<div class="info-row"><span class="info-k">' + esc(t(row.k)) + '</span><span class="info-v' + mono + '">' + esc(row.v) + '</span></div>';
   }).join('');
-  const resume = r.resume ? '<div class="info-row"><span class="info-k">Retomar</span><span class="info-v mono">' + esc(r.resume) + '</span></div>' : '';
+  const resume = r.resume ? '<div class="info-row"><span class="info-k">' + t('Retomar') + '</span><span class="info-v mono">' + esc(r.resume) + '</span></div>' : '';
   body.innerHTML = rows + resume;
 }
 
@@ -2274,11 +2577,12 @@ function filterByFolder(folder) {
 }
 const fmtAgo = (ms) => { const s = Math.floor((Date.now() - ms) / 1000);
   const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
+  if (LANG === 'en') return d ? d+'d ago' : h ? h+'h ago' : m ? m+'m ago' : 'now';
   return d ? 'há '+d+'d' : h ? 'há '+h+'h' : m ? 'há '+m+'min' : 'agora'; };
 const fmtTok = (n) => n >= 1e6 ? (n/1e6).toFixed(n >= 1e7 ? 0 : 1).replace('.0','') + 'M' : n >= 1e3 ? Math.round(n/1e3) + 'k' : '' + n;
 const fmtNum = (n) => (n || 0).toLocaleString('pt-BR');
 // rótulo curto da origem da sessão (campo "entrypoint" do .jsonl)
-const originLabel = (o) => o === 'claude-vscode' ? 'VS Code' : o === 'cli' ? 'terminal' : o === 'sdk-cli' ? 'SDK' : '';
+const originLabel = (o) => o === 'claude-vscode' ? t('VS Code') : o === 'cli' ? t('terminal') : o === 'sdk-cli' ? t('SDK') : '';
 
 // ── Conta logada (chip no cabeçalho) ──
 let ACCT = null;
@@ -2294,7 +2598,7 @@ function renderAccount() {
   const cl = a.claude;
   if (sources.claude && cl && cl.loggedIn) {
     const label = [cl.email || cl.name, cl.plan].filter(Boolean).join(' · '); // email no lugar da org (universal)
-    const tip = 'Claude' + (cl.org ? ' · ' + cl.org : '') + (cl.expiresAt ? ' · token válido até ' + new Date(cl.expiresAt).toLocaleString('pt-BR') : '');
+    const tip = 'Claude' + (cl.org ? ' · ' + cl.org : '') + (cl.expiresAt ? ' · ' + t('token válido até') + ' ' + new Date(cl.expiresAt).toLocaleString(LANG === 'en' ? 'en-US' : 'pt-BR') : '');
     chips.push('<span class="acct claude" title="' + esc(tip) + '">' + esc(label || 'Claude') + '</span>');
   }
   const cx = a.codex;
@@ -2327,10 +2631,10 @@ async function loadSessions() {
   const active = Object.keys(sources).filter(k => sources[k]);
   if (!active.length) { SESS = []; renderSessions(); return; }
   btn.disabled = true;
-  document.getElementById('sess-count').textContent = '· carregando…';
-  if (!SESS.length) box.innerHTML = '<div class="empty">Lendo sessões…</div>';
+  document.getElementById('sess-count').textContent = t('· carregando…');
+  if (!SESS.length) box.innerHTML = '<div class="empty">' + t('Lendo sessões…') + '</div>';
   try { SESS = (await (await fetch('/api/sessions?sources=' + active.join(','))).json()).sessions || []; }
-  catch { box.innerHTML = '<div class="empty">Falha ao ler as sessões.</div>'; btn.disabled = false; sessLoaded = false; return; }
+  catch { box.innerHTML = '<div class="empty">' + t('Falha ao ler as sessões.') + '</div>'; btn.disabled = false; sessLoaded = false; return; }
   btn.disabled = false;
   resetPage();
   renderSessions();
@@ -2358,8 +2662,8 @@ function startRename(btn, id, source) {
   const cur = s ? s.title : wrap.querySelector('.title').textContent;
   wrap.innerHTML =
     '<input class="title-edit" /> '
-    + '<button class="btn btn-copy btn-icon" data-act="ok" title="Confirmar"><svg class="ck" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></button>'
-    + '<button class="btn btn-arch btn-icon" data-act="cancel" title="Cancelar"><svg class="ck" viewBox="0 0 24 24"><path d="M6 6l12 12M6 18L18 6"/></svg></button>';
+    + '<button class="btn btn-copy btn-icon" data-act="ok" title="' + esc(t('Confirmar')) + '"><svg class="ck" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></button>'
+    + '<button class="btn btn-arch btn-icon" data-act="cancel" title="' + esc(t('Cancelar')) + '"><svg class="ck" viewBox="0 0 24 24"><path d="M6 6l12 12M6 18L18 6"/></svg></button>';
   const inp = wrap.querySelector('input');
   inp.value = cur; inp.focus(); inp.select();
   const ok = () => commitRename(wrap, id, source);
@@ -2406,61 +2710,61 @@ function renderSessions() {
   firstSession = list[0] || null; // alvo do Enter na busca
 
   document.getElementById('sess-count').textContent =
-    base.length ? '· ' + list.length + '/' + base.length + (showArchived ? ' arquivadas' : showFav ? ' favoritas' : '') : '';
+    base.length ? '· ' + list.length + '/' + base.length + (showArchived ? t(' arquivadas') : showFav ? t(' favoritas') : '') : '';
   document.getElementById('badge-sessions').textContent = activeCount;
   const tgl = document.getElementById('sess-archived-toggle');
-  tgl.textContent = showArchived ? '← Ver ativas' : 'Arquivadas (' + archivedCount + ')';
+  tgl.textContent = showArchived ? t('← Ver ativas') : t('Arquivadas (0)').replace('0', archivedCount);
   tgl.classList.toggle('on', showArchived);
   const ftg = document.getElementById('sess-fav-toggle');
-  ftg.textContent = 'Favoritas (' + favCount + ')';
+  ftg.textContent = t('Favoritas (0)').replace('0', favCount);
   ftg.classList.toggle('on', showFav);
 
   const noSource = !sources.claude && !sources.codex;
-  const emptyMsg = noSource ? 'Selecione Claude e/ou Codex acima.'
-    : showFav ? 'Nenhuma sessão favoritada.'
-    : showArchived ? 'Nenhuma sessão arquivada.'
-    : q ? 'Nenhuma sessão bate com o filtro.'
-    : SESS.length ? 'Nenhuma sessão ativa — veja as arquivadas.' : 'Nenhuma sessão encontrada.';
+  const emptyMsg = noSource ? t('Selecione Claude e/ou Codex acima.')
+    : showFav ? t('Nenhuma sessão favoritada.')
+    : showArchived ? t('Nenhuma sessão arquivada.')
+    : q ? t('Nenhuma sessão bate com o filtro.')
+    : SESS.length ? t('Nenhuma sessão ativa — veja as arquivadas.') : t('Nenhuma sessão encontrada.');
 
-  const wsBanner = wsFilter ? '<div class="ws-banner">Workspace: <b>' + esc(wsFilter.name) + '</b> <button onclick="clearWsFilter()">limpar filtro</button></div>' : '';
+  const wsBanner = wsFilter ? '<div class="ws-banner">' + t('Workspace:') + ' <b>' + esc(wsFilter.name) + '</b> <button onclick="clearWsFilter()">' + t('limpar filtro') + '</button></div>' : '';
   document.getElementById('sessions').innerHTML = wsBanner + (list.length ? list.slice(0, shown).map(s => \`
     <div class="card sess\${s.archived ? ' dim' : ''}">
       <div class="main">
         <div class="title-wrap">
-          <span class="title"\${s.renamed ? \` title="auto: \${esc(s.autoTitle)}"\` : ''}>\${esc(s.title)}</span>
-          <button class="btn btn-edit btn-icon" title="Renomear" onclick='startRename(this, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)})'><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+          <span class="title"\${s.renamed ? \` title="\${t('auto:')} \${esc(s.autoTitle)}"\` : ''}>\${esc(s.title)}</span>
+          <button class="btn btn-edit btn-icon" title="\${esc(t('Renomear'))}" onclick='startRename(this, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)})'><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
         </div>
         \${s.lastMsg ? \`<div class="lastmsg" title="\${esc(s.lastMsg)}">\${esc(s.lastMsg)}</div>\` : ''}
         <div class="meta">
           <span class="chip src-\${s.source}">\${s.source === 'codex' ? 'Codex' : 'Claude'}</span>
-          \${originLabel(s.origin) ? \`<span class="chip origin" title="Sessão iniciada no \${originLabel(s.origin)} — dá pra retomar tanto no terminal quanto no VS Code">\${originLabel(s.origin)}</span>\` : ''}
-          \${s.live ? '<span class="chip live">● ativa</span>' : ''}
-          <span class="chip folder clickable" title="\${esc(s.folder)} — clique p/ filtrar por esta pasta" onclick='filterByFolder(\${esc(JSON.stringify(s.folder))})'>\${esc(s.folder)}</span>
+          \${originLabel(s.origin) ? \`<span class="chip origin" title="\${esc(t('Sessão iniciada no'))} \${originLabel(s.origin)} \${esc(t('— dá pra retomar tanto no terminal quanto no VS Code'))}">\${originLabel(s.origin)}</span>\` : ''}
+          \${s.live ? '<span class="chip live">● ' + t('ativa') + '</span>' : ''}
+          <span class="chip folder clickable" title="\${esc(s.folder)} \${esc(t('— clique p/ filtrar por esta pasta'))}" onclick='filterByFolder(\${esc(JSON.stringify(s.folder))})'>\${esc(s.folder)}</span>
           <span class="chip up">\${fmtAgo(s.mtime)}</span>
-          \${s.usage && s.usage.turns ? \`<span class="chip tok" title="saída (gerados): \${fmtNum(s.usage.out)} · entrada: \${fmtNum(s.usage.in)} · cache: criação \${fmtNum(s.usage.cc)} + leitura \${fmtNum(s.usage.cr)} · \${s.usage.turns} turnos">\${fmtTok(s.usage.out)} tok</span>\` : ''}
+          \${s.usage && s.usage.turns ? \`<span class="chip tok" title="\${esc(t('saída (gerados):'))} \${fmtNum(s.usage.out)} · \${esc(t('entrada:'))} \${fmtNum(s.usage.in)} · \${esc(t('cache: criação'))} \${fmtNum(s.usage.cc)} + \${esc(t('leitura'))} \${fmtNum(s.usage.cr)} · \${s.usage.turns} \${esc(t('turnos'))}">\${fmtTok(s.usage.out)} \${t('tok')}</span>\` : ''}
           <span class="chip pid">\${esc(s.id.slice(0,8))}</span>
         </div>
       </div>
       <div class="side">
         <div class="side-top">
-          <button class="btn btn-icon btn-fav\${s.fav ? ' on' : ''}" title="\${s.fav ? 'Desfavoritar' : 'Favoritar'}" onclick='flag(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, "fav", \${!s.fav}, this)'><svg viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></button>
-          <button class="btn btn-icon btn-pin\${s.pinned ? ' on' : ''}" title="\${s.pinned ? 'Desafixar' : 'Fixar no topo'}" onclick='flag(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, "pin", \${!s.pinned}, this)'><svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></button>
+          <button class="btn btn-icon btn-fav\${s.fav ? ' on' : ''}" title="\${s.fav ? esc(t('Desfavoritar')) : esc(t('Favoritar'))}" onclick='flag(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, "fav", \${!s.fav}, this)'><svg viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></button>
+          <button class="btn btn-icon btn-pin\${s.pinned ? ' on' : ''}" title="\${s.pinned ? esc(t('Desafixar')) : esc(t('Fixar no topo'))}" onclick='flag(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, "pin", \${!s.pinned}, this)'><svg viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg></button>
           <div class="kebab-wrap">
-            <button class="btn btn-icon btn-kebab" title="Mais ações" onclick='toggleMenu(event, this)'><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
+            <button class="btn btn-icon btn-kebab" title="\${esc(t('Mais ações'))}" onclick='toggleMenu(event, this)'><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button>
             <div class="menu">
-              <button class="menu-item" onclick='sessionDetails(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}); closeMenus()'><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg> Detalhes</button>
-              <button class="menu-item" onclick='exportOne(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this); closeMenus()'><svg viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg> Baixar sessão (.json)</button>
+              <button class="menu-item" onclick='sessionDetails(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}); closeMenus()'><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg> \${t('Detalhes')}</button>
+              <button class="menu-item" onclick='exportOne(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this); closeMenus()'><svg viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg> \${t('Baixar sessão (.json)')}</button>
             </div>
           </div>
         </div>
         <div class="side-bottom">
-          <button class="btn btn-vscode btn-icon" title="\${s.source === 'codex' ? 'Abrir a pasta no VS Code' : 'Abrir no VS Code (pasta + esta conversa na extensão)'}" onclick='openIn(\${esc(JSON.stringify(s.folder))}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
-          <button class="btn btn-resume btn-icon" title="Copiar comando pra retomar no terminal (\${s.source === 'codex' ? 'codex resume' : 'claude --resume'})" onclick='resume(\${esc(JSON.stringify(s.folder))}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'><svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg></button>
-          <button class="btn btn-arch btn-icon" title="\${s.archived ? 'Desarquivar — volta pra lista de ativas' : 'Arquivar — tira da lista (não apaga nada)'}" onclick='archive(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${!s.archived}, this)'>\${s.archived ? '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M12 18v-6"/><path d="M9.5 14.5 12 12l2.5 2.5"/></svg>' : '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 13h4"/></svg>'}</button>
+          <button class="btn btn-vscode btn-icon" title="\${s.source === 'codex' ? esc(t('Abrir a pasta no VS Code')) : esc(t('Abrir no VS Code (pasta + esta conversa na extensão)'))}" onclick='openIn(\${esc(JSON.stringify(s.folder))}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
+          <button class="btn btn-resume btn-icon" title="\${esc(t('Copiar comando pra retomar no terminal'))} (\${s.source === 'codex' ? 'codex resume' : 'claude --resume'})" onclick='resume(\${esc(JSON.stringify(s.folder))}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'><svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg></button>
+          <button class="btn btn-arch btn-icon" title="\${s.archived ? esc(t('Desarquivar — volta pra lista de ativas')) : esc(t('Arquivar — tira da lista (não apaga nada)'))}" onclick='archive(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${!s.archived}, this)'>\${s.archived ? '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M12 18v-6"/><path d="M9.5 14.5 12 12l2.5 2.5"/></svg>' : '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 13h4"/></svg>'}</button>
         </div>
       </div>
     </div>\`).join('') + (list.length > shown
-      ? \`<div class="loadmore"><button class="btn btn-ghost" onclick="showMore()">Ver mais (+\${Math.min(PAGE, list.length - shown)})</button><button class="btn btn-ghost" onclick="showAll()">Ver todas (\${list.length})</button></div>\`
+      ? \`<div class="loadmore"><button class="btn btn-ghost" onclick="showMore()">\${t('Ver mais')} (+\${Math.min(PAGE, list.length - shown)})</button><button class="btn btn-ghost" onclick="showAll()">\${t('Ver todas')} (\${list.length})</button></div>\`
       : '') : \`<div class="empty">\${emptyMsg}</div>\`);
 }
 
@@ -2468,7 +2772,7 @@ async function openIn(folder, id, source, btn) {
   btn.disabled = true;
   try {
     const r = await (await fetch('/api/open', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ folder, session: id, source }) })).json();
-    if (r && !r.ok) toast(r.error || 'não consegui abrir o VS Code', 'err');
+    if (r && !r.ok) toast(r.error ? t(r.error) : t('não consegui abrir o VS Code'), 'err');
   } catch {}
   setTimeout(() => { btn.disabled = false; }, 600);
 }
@@ -2480,7 +2784,7 @@ function resume(folder, id, source, btn) {
     // botão é ícone (sem texto): troca o SVG por um ✓ e pisca verde, sem apagar o ícone
     const old = btn.innerHTML, t = btn.title;
     btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>';
-    btn.classList.add('ok'); btn.title = 'comando copiado ✓';
+    btn.classList.add('ok'); btn.title = t('comando copiado ✓');
     setTimeout(() => { btn.innerHTML = old; btn.classList.remove('ok'); btn.title = t; }, 1200);
   });
 }
@@ -2492,15 +2796,15 @@ async function exportOne(id, source, btn) {
   btn.disabled = true; btn.style.opacity = '.5';
   let bundle;
   try { bundle = await (await fetch('/api/export', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ items: [{ source, id }], scanSecrets: true }) })).json(); }
-  catch { btn.disabled = false; btn.style.opacity = ''; toast('Falha ao exportar', 'err'); return; }
+  catch { btn.disabled = false; btn.style.opacity = ''; toast(t('Falha ao exportar'), 'err'); return; }
   btn.disabled = false; btn.style.opacity = '';
   const secrets = ((bundle.sessions || [])[0] || {}).secrets || [];
   if (secrets.length) {
     const kinds = secrets.map(x => x.kind + ' ×' + x.count).join(', ');
-    if (!(await askConfirm('Possíveis segredos nesta sessão (' + kinds + '). Baixar mesmo assim?', { danger: true, okLabel: 'Baixar mesmo assim' }))) return;
+    if (!(await askConfirm(t('Possíveis segredos nesta sessão') + ' (' + kinds + '). ' + t('Baixar mesmo assim?'), { danger: true, okLabel: t('Baixar mesmo assim') }))) return;
   }
   downloadBundle(bundle);
-  toast('✓ sessão exportada', 'ok');
+  toast('✓ ' + t('sessão') + ' ' + t('exportada'), 'ok');
 }
 function downloadBundle(bundle) {
   const n = (bundle.sessions || []).length;
@@ -2525,40 +2829,42 @@ async function impPick(ev) {
   document.getElementById('imp-name').textContent = file.name;
   openImport();
   const plan = document.getElementById('imp-plan');
-  plan.innerHTML = '<div class="empty">Analisando…</div>';
+  plan.innerHTML = '<div class="empty">' + t('Analisando…') + '</div>';
   let bundle;
   try { bundle = JSON.parse(await file.text()); }
-  catch { plan.innerHTML = '<div class="warn"><b>Erro:</b> arquivo não é JSON válido.</div>'; return; }
+  catch { plan.innerHTML = '<div class="warn"><b>' + t('Erro:') + '</b> ' + t('arquivo não é JSON válido.') + '</div>'; return; }
   impBundle = bundle;
   let resp;
   try { resp = await (await fetch('/api/import', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ mode:'preview', bundle }) })).json(); }
-  catch { plan.innerHTML = '<div class="warn">Falha ao analisar.</div>'; return; }
-  if (!resp.ok) { plan.innerHTML = '<div class="warn"><b>Erro:</b> ' + esc(resp.error || 'bundle inválido') + '</div>'; return; }
+  catch { plan.innerHTML = '<div class="warn">' + t('Falha ao analisar.') + '</div>'; return; }
+  if (!resp.ok) { plan.innerHTML = '<div class="warn"><b>' + t('Erro:') + '</b> ' + esc(resp.error ? t(resp.error) : t('bundle inválido')) + '</div>'; return; }
   impPlan = resp; renderPlan();
 }
 function renderPlan() {
   const r = impPlan;
-  const head = '<div class="hint" style="margin-top:8px">Origem: <span class="mono">' + esc(r.oldHome || '?') + '</span> (' + esc(r.oldUser || '?')
-    + (r.host ? '@' + esc(r.host) : '') + ') <span class="arrow">→</span> esta máquina: <span class="mono">' + esc(r.newHome) + '</span> (' + esc(r.newUser) + ')</div>';
+  const head = '<div class="hint" style="margin-top:8px">' + t('Origem:') + ' <span class="mono">' + esc(r.oldHome || '?') + '</span> (' + esc(r.oldUser || '?')
+    + (r.host ? '@' + esc(r.host) : '') + ') <span class="arrow">→</span> ' + t('esta máquina:') + ' <span class="mono">' + esc(r.newHome) + '</span> (' + esc(r.newUser) + ')</div>';
   const cards = r.plan.map((p, i) => {
-    const collision = p.collision ? '<label class="check" style="margin:8px 0 0"><input type="checkbox" id="imp-ow-' + i + '" /> Sobrescrever (já existe nesta máquina)</label>' : '';
-    const secrets = (p.secrets || []).length ? '<div class="warn" style="margin-top:8px"><b>Segredos:</b> ' + esc(p.secrets.map(x => x.kind + ' ×' + x.count).join(', ')) + '</div>' : '';
+    const collision = p.collision ? '<label class="check" style="margin:8px 0 0"><input type="checkbox" id="imp-ow-' + i + '" /> ' + t('Sobrescrever (já existe nesta máquina)') + '</label>' : '';
+    const secrets = (p.secrets || []).length ? '<div class="warn" style="margin-top:8px"><b>' + t('Segredos:') + '</b> ' + esc(p.secrets.map(x => x.kind + ' ×' + x.count).join(', ')) + '</div>' : '';
     const foreign = (p.foreign || []).length
-      ? '<div class="lbl" style="margin-top:10px">Apontamentos fora da home (marcado = ignora; desmarque para substituir):</div>'
+      ? '<div class="lbl" style="margin-top:10px">' + t('Apontamentos fora da home (marcado = ignora; desmarque para substituir):') + '</div>'
         + p.foreign.map((f, j) => '<div class="ptr"><input type="checkbox" id="imp-ig-' + i + '-' + j + '" checked onchange="document.getElementById(\\'imp-rp-' + i + '-' + j + '\\').disabled=this.checked" />'
           + '<div class="grow"><span class="mono">' + esc(f.path) + '</span> <span class="lbl">×' + f.count + '</span>'
-          + '<input class="pathin" id="imp-rp-' + i + '-' + j + '" data-from="' + esc(f.path) + '" placeholder="substituir por…" disabled /></div></div>').join('')
-      : '<div class="lbl" style="margin-top:10px">Sem apontamentos fora da home — o remap automático cobre tudo.</div>';
+          + '<input class="pathin" id="imp-rp-' + i + '-' + j + '" data-from="' + esc(f.path) + '" placeholder="' + esc(t('substituir por…')) + '" disabled /></div></div>').join('')
+      : '<div class="lbl" style="margin-top:10px">' + t('Sem apontamentos fora da home — o remap automático cobre tudo.') + '</div>';
     return '<div class="plan-card"><div class="row"><div class="title">' + esc(p.title) + '</div><span class="chip src-' + p.source + '">' + (p.source === 'codex' ? 'Codex' : 'Claude') + '</span></div>'
-      + '<div class="lbl" style="margin-top:8px">Pasta de destino (cwd nesta máquina):</div>'
+      + '<div class="lbl" style="margin-top:8px">' + t('Pasta de destino (cwd nesta máquina):') + '</div>'
       + '<input class="pathin" id="imp-cwd-' + i + '" value="' + esc(p.suggestedCwd || p.oldCwd || '') + '" oninput="updTarget(' + i + ')" />'
-      + '<div class="lbl" style="margin-top:8px">Vai escrever em: <span class="mono" id="imp-tgt-' + i + '">' + esc(p.target) + '</span></div>'
-      + '<div class="lbl" style="margin-top:6px">' + p.homeHits + ' caminho(s) sob a home e ' + p.cwdHits + ' no cwd serão reescritos.</div>'
+      + '<div class="lbl" style="margin-top:8px">' + t('Vai escrever em:') + ' <span class="mono" id="imp-tgt-' + i + '">' + esc(p.target) + '</span></div>'
+      + '<div class="lbl" style="margin-top:6px">' + (LANG === 'en'
+          ? p.homeHits + ' path(s) under home and ' + p.cwdHits + ' in the cwd will be rewritten.'
+          : p.homeHits + ' caminho(s) sob a home e ' + p.cwdHits + ' no cwd serão reescritos.') + '</div>'
       + collision + secrets + foreign + '</div>';
   }).join('');
   document.getElementById('imp-plan').innerHTML = head + cards
-    + '<div class="actions" style="margin-top:12px"><button class="btn btn-copy" onclick="applyImport()">Aplicar importação</button>'
-    + '<button class="btn btn-ghost" onclick="copyAiPrompt(this)">Copiar prompt pra IA</button></div>';
+    + '<div class="actions" style="margin-top:12px"><button class="btn btn-copy" onclick="applyImport()">' + t('Aplicar importação') + '</button>'
+    + '<button class="btn btn-ghost" onclick="copyAiPrompt(this)">' + t('Copiar prompt pra IA') + '</button></div>';
 }
 function updTarget(i) {
   const p = impPlan.plan[i];
@@ -2581,11 +2887,11 @@ async function applyImport() {
   try { resp = await (await fetch('/api/import', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ mode:'apply', bundle: impBundle, decisions }) })).json(); }
   catch { return; }
   const items = (resp.results || []).map(x => x.ok
-    ? '<div class="ok-line">✓ importada: <span class="mono">' + esc(x.target) + '</span><br><span class="lbl">retomar:</span> <span class="mono">' + esc(x.resume) + '</span></div>'
-    : x.skipped ? '<div class="lbl">— pulada (' + esc(x.reason) + '): ' + esc(x.id) + '</div>'
-    : '<div class="warn">erro em ' + esc(x.id) + ': ' + esc(x.error || '') + '</div>').join('<div style="height:8px"></div>');
-  document.getElementById('imp-plan').innerHTML = '<div class="plan-card"><div class="title">Resultado</div><div style="margin-top:10px">' + (items || 'nada') + '</div></div>'
-    + '<div class="actions" style="margin-top:12px"><button class="btn btn-copy" onclick="closeImport(true)">Fechar e atualizar</button></div>';
+    ? '<div class="ok-line">✓ ' + t('importada:') + ' <span class="mono">' + esc(x.target) + '</span><br><span class="lbl">' + t('retomar:') + '</span> <span class="mono">' + esc(x.resume) + '</span></div>'
+    : x.skipped ? '<div class="lbl">— ' + t('pulada') + ' (' + esc(t(x.reason) || x.reason) + '): ' + esc(x.id) + '</div>'
+    : '<div class="warn">' + t('erro em') + ' ' + esc(x.id) + ': ' + esc(x.error ? t(x.error) : '') + '</div>').join('<div style="height:8px"></div>');
+  document.getElementById('imp-plan').innerHTML = '<div class="plan-card"><div class="title">' + t('Resultado') + '</div><div style="margin-top:10px">' + (items || t('nada')) + '</div></div>'
+    + '<div class="actions" style="margin-top:12px"><button class="btn btn-copy" onclick="closeImport(true)">' + t('Fechar e atualizar') + '</button></div>';
 }
 function copyAiPrompt(btn) {
   const r = impPlan, L = [];
@@ -2607,8 +2913,12 @@ function copyAiPrompt(btn) {
   });
   L.push('');
   L.push('Regra: quando não souber para onde apontar um caminho, NÃO adivinhe — me pergunte e me dê a opção de ignorar (deixar como está). Grave cada sessão Claude em ~/.claude/projects/<pasta-codificada-do-novo-cwd>/<id>.jsonl e cada Codex em ~/.codex/sessions/<caminho-original-do-bundle>.');
-  navigator.clipboard.writeText(L.join('\\n')).then(() => { const o = btn.textContent; btn.textContent = 'copiado ✓'; setTimeout(() => { btn.textContent = o; }, 1400); });
+  navigator.clipboard.writeText(L.join('\\n')).then(() => { const o = btn.textContent; btn.textContent = t('copiado ✓'); setTimeout(() => { btn.textContent = o; }, 1400); });
 }
+
+// i18n: traduz a casca estática e revela o body (inglês é o padrão). Safety net:
+// se algo falhar, o body NÃO pode ficar escondido pra sempre.
+try { applyLang(); } catch (e) { document.body.style.visibility = 'visible'; }
 
 // começa o poll na cadência da aba inicial (Sessões → 20s; popula badge/relógio já).
 startPoll();

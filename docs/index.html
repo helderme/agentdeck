@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AgentDeck — painel local pra Claude Code e Codex</title>
-<meta name="description" content="Painel local pra listar, retomar e abrir sessões do Claude Code e do Codex, montar workspaces multi-repo e ver/finalizar processos em background. Roda 100% local no Linux." />
+<title>AgentDeck — local dashboard for Claude Code and Codex</title>
+<meta name="description" content="A local dashboard to list, resume and open your Claude Code and Codex sessions, build multi-repo workspaces and watch/stop background processes. Runs 100% local on Linux." />
 <meta property="og:title" content="AgentDeck" />
-<meta property="og:description" content="Liste, retome e abra suas sessões do Claude Code e Codex. Workspaces multi-repo e processos em background. 100% local." />
+<meta property="og:description" content="List, resume and open your Claude Code and Codex sessions. Multi-repo workspaces and background processes. 100% local." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://helderme.github.io/agentdeck/" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23b65f3c'/%3E%3C/svg%3E" />
@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
   :root {
-    /* warm-paper (claro) — mesmos tokens OKLCH do app */
+    /* warm-paper (light) — same OKLCH tokens as the app */
     --bg: oklch(97% 0.008 85); --surface: oklch(99.5% 0.003 85); --surface-2: oklch(94% 0.008 80);
     --line: oklch(88% 0.01 80); --ink: oklch(28% 0.02 60); --muted: oklch(51% 0.02 65);
     --clay: oklch(56% 0.14 45); --clay-ink: oklch(99% 0.01 85); --clay-soft: oklch(56% 0.14 45 / .1);
@@ -50,6 +50,8 @@
   nav .links { display: flex; gap: var(--s5); align-items: center; font-weight: 500; font-size: 15px; }
   nav .links a { color: var(--muted); }
   nav .links a:hover { color: var(--ink); text-decoration: none; }
+  #langtog { font: inherit; font-weight: 600; font-size: 13px; color: var(--clay); background: var(--clay-soft); border: none; border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  #langtog:hover { filter: brightness(1.05); }
 
   /* hero */
   header.hero { padding: var(--s7) 0 var(--s8); text-align: center; }
@@ -81,7 +83,6 @@
 
   pre { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--s4) var(--s5); overflow-x: auto; font-size: 14.5px; line-height: 1.7; color: var(--ink); }
   pre .c { color: var(--muted); }
-  pre .p { color: var(--clay); }
   p.hint { color: var(--muted); font-size: 14.5px; }
   p.hint code, li code, td code { background: var(--surface-2); border-radius: 5px; padding: 1px 6px; font-size: 0.85em; }
 
@@ -108,96 +109,97 @@
       AgentDeck
     </span>
     <span class="links">
-      <a href="#comecar">Começar</a>
-      <a href="#features">Features</a>
+      <a href="#start" data-i18n="nav.start">Get started</a>
+      <a href="#features" data-i18n="nav.features">Features</a>
       <a href="https://github.com/helderme/agentdeck">GitHub ↗</a>
+      <button id="langtog" onclick="toggleLang()">Português</button>
     </span>
   </nav>
 
   <header class="hero">
     <svg class="icon" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#b65f3c"/><g transform="translate(256 262)"><rect x="-135" y="-82" width="270" height="165" rx="26" fill="#e6d4c2" transform="rotate(-8)"/><rect x="-135" y="-82" width="270" height="165" rx="26" fill="#f4ebe0" transform="rotate(5)"/><rect x="-135" y="-82" width="270" height="165" rx="26" fill="#fffaf3"/><rect x="-98" y="-50" width="150" height="20" rx="10" fill="#b65f3c"/><rect x="-98" y="-12" width="196" height="13" rx="6.5" fill="#c9b4a1"/><rect x="-98" y="16" width="160" height="13" rx="6.5" fill="#c9b4a1"/><circle cx="92" cy="-42" r="13" fill="#3c9a6b"/></g></svg>
-    <h1>Suas sessões de agente,<br>em um deck.</h1>
-    <p class="tagline">Um painel local pra <b>listar, retomar e abrir</b> as sessões do
-      <b>Claude Code</b> e do <b>Codex</b>, montar <b>workspaces</b> multi-repo e
-      <b>ver/finalizar</b> o que ficou rodando em background.</p>
+    <h1 data-i18n="hero.h1">Your agent sessions,<br>in one deck.</h1>
+    <p class="tagline" data-i18n="hero.tagline">A local dashboard to <b>list, resume and open</b> your <b>Claude Code</b> and
+      <b>Codex</b> sessions, build multi-repo <b>workspaces</b> and <b>watch/stop</b> whatever
+      you left running in the background.</p>
     <div class="cta">
-      <a class="btn btn-primary" href="#comecar">Começar</a>
+      <a class="btn btn-primary" href="#start" data-i18n="hero.cta1">Get started</a>
       <a class="btn btn-ghost" href="https://github.com/helderme/agentdeck">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
-        Ver no GitHub
+        <span data-i18n="hero.cta2">View on GitHub</span>
       </a>
     </div>
-    <p class="local-note">Roda <b>100% local</b> em <code>127.0.0.1</code> · Linux · só precisa do Bun</p>
+    <p class="local-note" data-i18n="hero.local">Runs <b>100% local</b> on <code>127.0.0.1</code> · Linux · only needs Bun</p>
   </header>
 
   <section id="features">
-    <h2>Três abas, zero caça a PID</h2>
-    <p class="sub">Tudo renderizado — você lê, retoma e gerencia sem decorar comando nem vasculhar o terminal.</p>
+    <h2 data-i18n="feat.h2">Three tabs, zero PID hunting</h2>
+    <p class="sub" data-i18n="feat.sub">All rendered — you read, resume and manage without memorizing a command or digging through the terminal.</p>
     <div class="cards">
       <div class="card">
         <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div>
-        <h3>Sessões</h3>
-        <p>Lista as sessões do Claude Code e do Codex com título, pasta e "onde paramos".
-          Retoma num clique, abre no VS Code (pasta + a conversa na extensão), cria sessão
-          nova escolhendo agente, modelo, effort e modo. Favorita, fixa, arquiva, renomeia,
-          exporta/importa.</p>
+        <h3 data-i18n="c1.h3">Sessions</h3>
+        <p data-i18n="c1.p">Lists your Claude Code and Codex sessions with title, folder and "where we left
+          off". Resume in one click, open in VS Code (folder + the conversation in the
+          extension), start a new session choosing agent, model, effort and mode. Favorite,
+          pin, archive, rename, export/import.</p>
       </div>
       <div class="card">
         <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
-        <h3>Workspaces</h3>
-        <p>Agrupe vários repos. Abra todos numa janela multi-root do VS Code, ou inicie
-          <b>uma sessão só</b> que enxerga todos eles (raiz + os outros via
-          <code>--add-dir</code>) — o multi-root no terminal.</p>
+        <h3 data-i18n="c2.h3">Workspaces</h3>
+        <p data-i18n="c2.p">Group several repos. Open them all in a multi-root VS Code window, or start
+          <b>a single session</b> that sees all of them (root + the others via
+          <code>--add-dir</code>) — multi-root in the terminal.</p>
       </div>
       <div class="card">
         <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></div>
-        <h3>Processos</h3>
-        <p>O que ficou rodando em background — dev servers, containers — com PID, tempo,
-          porta e pasta. Finalize (por PID, porta ou container), reinicie, veja o log ou
-          inicie um processo novo.</p>
+        <h3 data-i18n="c3.h3">Processes</h3>
+        <p data-i18n="c3.p">What's still running in the background — dev servers, containers — with PID,
+          uptime, port and folder. Stop it (by PID, port or container), restart it, view
+          the log, or start a new process.</p>
       </div>
     </div>
   </section>
 
-  <section id="comecar">
-    <h2>Começar em ~2 minutos</h2>
-    <p class="sub">Só precisa do <a href="https://bun.sh">Bun</a>. É uma ferramenta de Linux.</p>
-<pre><span class="c"># 1) instale o Bun (uma vez só)</span>
+  <section id="start">
+    <h2 data-i18n="start.h2">Get started in ~2 minutes</h2>
+    <p class="sub" data-i18n="start.sub">You only need <a href="https://bun.sh">Bun</a>. It's a Linux tool.</p>
+<pre data-i18n="start.code"><span class="c"># 1) install Bun (once)</span>
 curl -fsSL https://bun.sh/install | bash
 
-<span class="c"># 2) clone e rode</span>
+<span class="c"># 2) clone and run</span>
 git clone https://github.com/helderme/agentdeck.git
 cd agentdeck
 ./start.sh</pre>
-    <p class="hint">O <code>start.sh</code> sobe o servidor e abre numa janela de app limpa.
-      Sem ele: <code>bun server.ts</code> e abra <code>http://localhost:7799</code>. Porta
-      ocupada? <code>AGENTDECK_PORT=8080 ./start.sh</code>. Pra um atalho no menu de
-      aplicativos, rode <code>./install.sh</code>.</p>
+    <p class="hint" data-i18n="start.hint">The <code>start.sh</code> script boots the server and opens a clean app window.
+      Without it: <code>bun server.ts</code> and open <code>http://localhost:7799</code>. Port
+      taken? <code>AGENTDECK_PORT=8080 ./start.sh</code>. For a menu shortcut, run
+      <code>./install.sh</code>.</p>
   </section>
 
   <section>
-    <h2>O que precisa instalado</h2>
-    <p class="sub">Só o Bun é obrigatório. Sem uma ferramenta opcional, só a feature dela some — o resto roda igual.</p>
+    <h2 data-i18n="req.h2">What you need installed</h2>
+    <p class="sub" data-i18n="req.sub">Only Bun is required. Without an optional tool, just its feature is gone — everything else runs the same.</p>
     <table>
-      <tr><th>Ferramenta</th><th>Pra quê</th></tr>
-      <tr><td>Bun</td><td>roda o servidor — único requisito</td></tr>
-      <tr><td class="opt"><code>claude</code> / <code>codex</code></td><td>abrir uma nova sessão e o comando de retomar (a listagem funciona sem eles)</td></tr>
-      <tr><td class="opt">Chrome / Chromium</td><td>janela de app limpa (sem ele, cai pro navegador padrão)</td></tr>
-      <tr><td class="opt">um terminal</td><td>abrir a nova sessão num terminal real</td></tr>
-      <tr><td class="opt"><code>code</code></td><td>botão Abrir no VS Code</td></tr>
-      <tr><td class="opt"><code>docker</code></td><td>listar/parar containers</td></tr>
-      <tr><td class="opt">zenity / kdialog</td><td>seletor de pasta nativo</td></tr>
+      <tr><th data-i18n="req.th1">Tool</th><th data-i18n="req.th2">What for</th></tr>
+      <tr><td>Bun</td><td data-i18n="req.r1">runs the server — the only requirement</td></tr>
+      <tr><td class="opt"><code>claude</code> / <code>codex</code></td><td data-i18n="req.r2">start a new session and the resume command (listing works without them)</td></tr>
+      <tr><td class="opt">Chrome / Chromium</td><td data-i18n="req.r3">clean app window (without it, falls back to your default browser)</td></tr>
+      <tr><td class="opt" data-i18n="req.r4t">a terminal</td><td data-i18n="req.r4">open the new session in a real terminal</td></tr>
+      <tr><td class="opt"><code>code</code></td><td data-i18n="req.r5">the Open in VS Code button</td></tr>
+      <tr><td class="opt"><code>docker</code></td><td data-i18n="req.r6">list/stop containers</td></tr>
+      <tr><td class="opt">zenity / kdialog</td><td data-i18n="req.r7">native folder picker</td></tr>
     </table>
   </section>
 
   <section>
-    <h2>Seguro por padrão</h2>
-    <p class="sub">O painel executa comandos locais, então é desenhado pra nunca sair da sua máquina.</p>
+    <h2 data-i18n="sec.h2">Secure by default</h2>
+    <p class="sub" data-i18n="sec.sub">The panel runs local commands, so it's designed to never leave your machine.</p>
     <ul class="sec">
-      <li><span class="dot"></span><span><b>Só em <code>127.0.0.1</code></b> — nada exposto pra fora; não encaminhe a porta.</span></li>
-      <li><span class="dot"></span><span><b>Anti-rebinding e anti-CSRF</b> — valida o header <code>Host</code> e a origem de todo POST (fail-closed); uma página web aberta no navegador não aciona nada.</span></li>
-      <li><span class="dot"></span><span><b>Sem shell onde importa</b> — comandos externos rodam por <code>execFile</code> ou com aspas escapadas; <code>kill</code> só atua em processos reconhecidos.</span></li>
-      <li><span class="dot"></span><span><b>Nunca expõe o token</b> — do login só lê e-mail/plano, jamais a credencial.</span></li>
+      <li><span class="dot"></span><span data-i18n="sec.l1"><b>Only on <code>127.0.0.1</code></b> — nothing exposed; don't port-forward it.</span></li>
+      <li><span class="dot"></span><span data-i18n="sec.l2"><b>Anti-rebinding & anti-CSRF</b> — validates the <code>Host</code> header and the origin of every POST (fail-closed); a web page open in your browser triggers nothing.</span></li>
+      <li><span class="dot"></span><span data-i18n="sec.l3"><b>No shell where it matters</b> — external commands run via <code>execFile</code> or with escaped quotes; <code>kill</code> only acts on recognized processes.</span></li>
+      <li><span class="dot"></span><span data-i18n="sec.l4"><b>Never exposes the token</b> — from your login it reads only email/plan, never the credential.</span></li>
     </ul>
   </section>
 
@@ -207,5 +209,64 @@ cd agentdeck
   </footer>
 
 </div>
+
+<script>
+  // i18n: inglês é o padrão (texto autorado no HTML); PT é override ao vivo, sem recarregar
+  const PT = {
+    'nav.start': 'Começar',
+    'nav.features': 'Features',
+    'hero.h1': 'Suas sessões de agente,<br>em um deck.',
+    'hero.tagline': 'Um painel local pra <b>listar, retomar e abrir</b> as sessões do <b>Claude Code</b> e do <b>Codex</b>, montar <b>workspaces</b> multi-repo e <b>ver/finalizar</b> o que ficou rodando em background.',
+    'hero.cta1': 'Começar',
+    'hero.cta2': 'Ver no GitHub',
+    'hero.local': 'Roda <b>100% local</b> em <code>127.0.0.1</code> · Linux · só precisa do Bun',
+    'feat.h2': 'Três abas, zero caça a PID',
+    'feat.sub': 'Tudo renderizado — você lê, retoma e gerencia sem decorar comando nem vasculhar o terminal.',
+    'c1.h3': 'Sessões',
+    'c1.p': 'Lista as sessões do Claude Code e do Codex com título, pasta e "onde paramos". Retoma num clique, abre no VS Code (pasta + a conversa na extensão), cria sessão nova escolhendo agente, modelo, effort e modo. Favorita, fixa, arquiva, renomeia, exporta/importa.',
+    'c2.h3': 'Workspaces',
+    'c2.p': 'Agrupe vários repos. Abra todos numa janela multi-root do VS Code, ou inicie <b>uma sessão só</b> que enxerga todos eles (raiz + os outros via <code>--add-dir</code>) — o multi-root no terminal.',
+    'c3.h3': 'Processos',
+    'c3.p': 'O que ficou rodando em background — dev servers, containers — com PID, tempo, porta e pasta. Finalize (por PID, porta ou container), reinicie, veja o log ou inicie um processo novo.',
+    'start.h2': 'Começar em ~2 minutos',
+    'start.sub': 'Só precisa do <a href="https://bun.sh">Bun</a>. É uma ferramenta de Linux.',
+    'start.code': '<span class="c"># 1) instale o Bun (uma vez só)</span>\ncurl -fsSL https://bun.sh/install | bash\n\n<span class="c"># 2) clone e rode</span>\ngit clone https://github.com/helderme/agentdeck.git\ncd agentdeck\n./start.sh',
+    'start.hint': 'O <code>start.sh</code> sobe o servidor e abre numa janela de app limpa. Sem ele: <code>bun server.ts</code> e abra <code>http://localhost:7799</code>. Porta ocupada? <code>AGENTDECK_PORT=8080 ./start.sh</code>. Pra um atalho no menu, rode <code>./install.sh</code>.',
+    'req.h2': 'O que precisa instalado',
+    'req.sub': 'Só o Bun é obrigatório. Sem uma ferramenta opcional, só a feature dela some — o resto roda igual.',
+    'req.th1': 'Ferramenta',
+    'req.th2': 'Pra quê',
+    'req.r1': 'roda o servidor — único requisito',
+    'req.r2': 'abrir uma nova sessão e o comando de retomar (a listagem funciona sem eles)',
+    'req.r3': 'janela de app limpa (sem ele, cai pro navegador padrão)',
+    'req.r4t': 'um terminal',
+    'req.r4': 'abrir a nova sessão num terminal real',
+    'req.r5': 'botão Abrir no VS Code',
+    'req.r6': 'listar/parar containers',
+    'req.r7': 'seletor de pasta nativo',
+    'sec.h2': 'Seguro por padrão',
+    'sec.sub': 'O painel executa comandos locais, então é desenhado pra nunca sair da sua máquina.',
+    'sec.l1': '<b>Só em <code>127.0.0.1</code></b> — nada exposto pra fora; não encaminhe a porta.',
+    'sec.l2': '<b>Anti-rebinding e anti-CSRF</b> — valida o header <code>Host</code> e a origem de todo POST (fail-closed); uma página web aberta no navegador não aciona nada.',
+    'sec.l3': '<b>Sem shell onde importa</b> — comandos externos rodam por <code>execFile</code> ou com aspas escapadas; <code>kill</code> só atua em processos reconhecidos.',
+    'sec.l4': '<b>Nunca expõe o token</b> — do login só lê e-mail/plano, jamais a credencial.',
+  };
+  let LANG = localStorage.getItem('agentdeck-lang') === 'pt' ? 'pt' : 'en';
+  function applyLang() {
+    document.documentElement.lang = LANG === 'pt' ? 'pt-BR' : 'en';
+    document.querySelectorAll('[data-i18n]').forEach(function (el) {
+      var k = el.getAttribute('data-i18n');
+      if (el.dataset.en == null) el.dataset.en = el.innerHTML;   // cacheia o inglês autorado
+      el.innerHTML = (LANG === 'pt' && PT[k] != null) ? PT[k] : el.dataset.en;
+    });
+    document.getElementById('langtog').textContent = LANG === 'pt' ? 'English' : 'Português';
+  }
+  function toggleLang() {
+    LANG = LANG === 'pt' ? 'en' : 'pt';
+    localStorage.setItem('agentdeck-lang', LANG);
+    applyLang();
+  }
+  applyLang();
+</script>
 </body>
 </html>
