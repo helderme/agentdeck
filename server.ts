@@ -8,7 +8,7 @@
  * Rodar:  bun server.ts   (ou ./start.sh)   →   http://localhost:7799
  */
 import { execFileSync, execSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, hostname, platform, userInfo } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 
@@ -1181,6 +1181,36 @@ Bun.serve({
       return json({ ok: true });
     }
 
+    // apaga a sessão: o transcript em ~/.claude (history) e/ou os metadados do AgentDeck (meta).
+    // NUNCA toca na pasta do projeto (o código real do usuário). Tudo com validação de path.
+    if (url.pathname === '/api/delete-session' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as { id?: string; source?: Source; history?: boolean; meta?: boolean };
+      const id = (body.id ?? '').trim();
+      if (!/^[A-Za-z0-9._-]+$/.test(id)) return json({ ok: false, error: 'id inválido' }, 400);
+      const source: Source = body.source === 'codex' ? 'codex' : 'claude';
+      let removed = false;
+      if (body.history !== false) {
+        if (source === 'claude') {
+          const loc = locateClaude(id);
+          if (loc && within(PROJECTS_DIR, loc.path)) {
+            try { rmSync(loc.path, { force: true }); removed = true; } catch { /* ignora */ }
+            const sub = join(PROJECTS_DIR, loc.projectDir, id); // subagentes <projectDir>/<id>/
+            if (existsSync(sub) && within(PROJECTS_DIR, sub)) { try { rmSync(sub, { recursive: true, force: true }); } catch { /* ignora */ } }
+          }
+        } else {
+          const loc = locateCodex(id);
+          if (loc && within(CODEX_DIR, loc.path)) { try { rmSync(loc.path, { force: true }); removed = true; } catch { /* ignora */ } }
+        }
+      }
+      if (body.meta !== false) {
+        const key = archKey(source, id);
+        try { const f = readFlags(); f.fav.delete(key); f.pin.delete(key); writeFlags(f); } catch { /* ignora */ }
+        try { const n = readNames(); if (n[key] != null) { delete n[key]; writeNames(n); } } catch { /* ignora */ }
+        try { const a = readArchived(); if (a.delete(key)) writeArchived(a); } catch { /* ignora */ }
+      }
+      return json({ ok: true, removed });
+    }
+
     if (url.pathname === '/api/kill' && req.method === 'POST') {
       const body = (await req.json().catch(() => ({}))) as { pid?: number; port?: number; container?: string };
       if (body.container) {
@@ -1452,6 +1482,9 @@ const HTML = /* html */ `<!doctype html>
   .menu.open { display:block; animation:fade .12s ease-out; }
   .menu-item { display:flex; align-items:center; gap:8px; width:100%; text-align:left; background:transparent; border:0; color:var(--ink); font-family:var(--body); font-size:13px; font-weight:500; padding:8px 10px; border-radius:6px; cursor:pointer; white-space:nowrap; }
   .menu-item:hover { background:var(--surface-2); }
+  .menu-item.danger { color:var(--red); }
+  .menu-item.danger:hover { background:var(--red-soft); }
+  .del-target { font-weight:600; color:var(--ink); background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 12px; margin:var(--s3) 0; font-size:14px; word-break:break-word; }
   .menu-item svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
   .info-row { display:flex; gap:var(--s4); padding:7px 0; border-top:1px solid var(--line); font-size:13px; }
   .info-row:first-child { border-top:0; }
@@ -1752,6 +1785,23 @@ const HTML = /* html */ `<!doctype html>
       </div>
     </div>
 
+    <div class="modal-bg" id="del-modal" onclick="if(event.target===this)closeDel()">
+      <div class="modal">
+        <div class="modal-head">
+          <h2 class="section-title" style="margin:0">Apagar sessão</h2>
+          <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeDel()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
+        </div>
+        <p class="hint">Escolha o que apagar. A pasta do projeto (seu código) NÃO é tocada — só o histórico da conversa (que fica em ~/.claude) e os dados do AgentDeck.</p>
+        <div class="del-target" id="del-target"></div>
+        <label class="check"><input type="checkbox" id="del-history" checked /> <span>Histórico da conversa</span></label>
+        <label class="check"><input type="checkbox" id="del-meta" checked /> <span>Dados do AgentDeck (favorito, fixado, nome, arquivado)</span></label>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" onclick="closeDel()">Cancelar</button>
+          <button class="btn btn-arch" id="del-go" onclick="doDeleteSession()">Apagar sessão</button>
+        </div>
+      </div>
+    </div>
+
     <div class="toasts" id="toasts"></div>
 
     <div class="modal-bg" id="help-modal" onclick="if(event.target===this)closeHelp()">
@@ -1779,6 +1829,15 @@ const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','
 // ── i18n: inglês é o padrão; PT é a fonte no HTML, traduzida ao vivo (sem reload) ──
 const I18N = {
   // 'string em português (a fonte)': 'English translation'
+  // — apagar sessão —
+  'Apagar sessão': 'Delete session',
+  'Escolha o que apagar. A pasta do projeto (seu código) NÃO é tocada — só o histórico da conversa (que fica em ~/.claude) e os dados do AgentDeck.': 'Choose what to delete. Your project folder (your code) is NOT touched — only the conversation history (stored in ~/.claude) and the AgentDeck data.',
+  'Histórico da conversa': 'Conversation history',
+  'Dados do AgentDeck (favorito, fixado, nome, arquivado)': 'AgentDeck data (favorite, pin, name, archived)',
+  'Sessão apagada': 'Session deleted',
+  'Falha ao apagar': 'Delete failed',
+  'Marque ao menos uma opção': 'Check at least one option',
+  'id inválido': 'invalid id',
   // — abas, cabeçalho, botões fixos —
   'Sessões': 'Sessions',
   'Processos': 'Processes',
@@ -2759,6 +2818,7 @@ function renderSessions() {
             <div class="menu">
               <button class="menu-item" onclick='sessionDetails(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}); closeMenus()'><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/></svg> \${t('Detalhes')}</button>
               <button class="menu-item" onclick='exportOne(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this); closeMenus()'><svg viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M5 21h14"/></svg> \${t('Baixar sessão (.json)')}</button>
+              <button class="menu-item danger" onclick='deleteSessionUI(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}); closeMenus()'><svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg> \${t('Apagar sessão')}</button>
             </div>
           </div>
         </div>
@@ -2795,6 +2855,31 @@ function resume(folder, id, source, btn) {
     btn.classList.add('ok'); btn.title = t('comando copiado ✓');
     setTimeout(() => { btn.innerHTML = oldHtml; btn.classList.remove('ok'); btn.title = oldTitle; }, 2000);
   });
+}
+
+// ── Apagar sessão ──
+let delTarget = null;
+function deleteSessionUI(id, source) {
+  const s = SESS.find(x => x.id === id && x.source === source);
+  delTarget = { id, source };
+  document.getElementById('del-history').checked = true;
+  document.getElementById('del-meta').checked = true;
+  document.getElementById('del-target').textContent = s ? s.title : id;
+  document.getElementById('del-modal').classList.add('open');
+}
+function closeDel() { document.getElementById('del-modal').classList.remove('open'); delTarget = null; }
+async function doDeleteSession() {
+  if (!delTarget) return;
+  const history = document.getElementById('del-history').checked;
+  const meta = document.getElementById('del-meta').checked;
+  if (!history && !meta) { toast(t('Marque ao menos uma opção'), 'err'); return; }
+  let r; try { r = await (await fetch('/api/delete-session', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ id: delTarget.id, source: delTarget.source, history, meta }) })).json(); } catch {}
+  if (r && r.ok) {
+    const tgt = delTarget;
+    SESS = SESS.filter(x => !(x.id === tgt.id && x.source === tgt.source));
+    closeDel(); renderSessions();
+    toast(t('Sessão apagada'), 'ok');
+  } else toast(r && r.error ? t(r.error) : t('Falha ao apagar'), 'err');
 }
 
 // ── Exportar (por sessão) ──
@@ -2942,6 +3027,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('help-modal').classList.contains('open')) { closeHelp(); return; }
   if (e.key === 'Escape' && document.getElementById('hist-modal').classList.contains('open')) { closeHistory(); return; }
   if (e.key === 'Escape' && document.getElementById('info-modal').classList.contains('open')) { closeInfo(); return; }
+  if (e.key === 'Escape' && document.getElementById('del-modal').classList.contains('open')) { closeDel(); return; }
   if (e.key === 'Escape' && document.getElementById('imp-modal').classList.contains('open')) { closeImport(); return; }
   if (e.key === 'Escape' && document.querySelector('.menu.open')) { closeMenus(); return; }
   if (curTab !== 'sessions') return;
