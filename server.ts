@@ -894,6 +894,13 @@ const sessionInfo = (source: Source, id: string): { ok: boolean; title?: string;
 const hasBin = (bin: string): boolean => { try { return !!Bun.which(bin); } catch { return false; } };
 // editor estilo VS Code: tenta o oficial, depois VSCodium (codium), depois Insiders
 const editorBin = (): string | null => ['code', 'codium', 'code-insiders'].find((b) => hasBin(b)) ?? null;
+
+// auto-update via git: a pasta do app é a do server.ts (independe do cwd de quem rodou)
+const REPO_DIR = import.meta.dir;
+const gitOut = (args: string[]): string => {
+  try { return execFileSync('git', ['-C', REPO_DIR, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; }
+};
+const isGitRepo = (): boolean => gitOut(['rev-parse', '--is-inside-work-tree']) === 'true';
 // abre o diálogo nativo (zenity/kdialog/yad) e devolve o caminho absoluto escolhido.
 // async (spawn) pra não travar o servidor enquanto o diálogo está aberto.
 const pickFolder = (): Promise<{ ok: boolean; path?: string; error?: string }> => {
@@ -1005,6 +1012,24 @@ Bun.serve({
       const id = url.searchParams.get('id') ?? '';
       if (!/^[A-Za-z0-9._-]+$/.test(id)) return json({ ok: false, error: 'id inválido' }, 400);
       try { return json(sessionInfo(source, id)); } catch (e: any) { return json({ ok: false, error: String(e?.message ?? e) }, 500); }
+    }
+
+    // checa atualização do app (git): quantos commits atrás do remoto. fetch silencioso.
+    if (url.pathname === '/api/update-check') {
+      if (!isGitRepo()) return json({ isGit: false });
+      const upstream = gitOut(['rev-parse', '--abbrev-ref', '@{u}']);
+      if (!upstream) return json({ isGit: true, hasUpstream: false });
+      gitOut(['fetch', '--quiet']); // rede; se offline, ignora e segue com o que tem
+      const behind = Number(gitOut(['rev-list', '--count', 'HEAD..@{u}']) || '0');
+      return json({ isGit: true, hasUpstream: true, behind, current: gitOut(['rev-parse', '--short', 'HEAD']) });
+    }
+    // atualiza o app: git pull --ff-only (sem merge arriscado). Precisa reabrir o painel depois.
+    if (url.pathname === '/api/update' && req.method === 'POST') {
+      if (!isGitRepo()) return json({ ok: false, error: 'não é um repositório git' });
+      let out = '', ok = true;
+      try { out = execFileSync('git', ['-C', REPO_DIR, 'pull', '--ff-only'], { encoding: 'utf8' }); }
+      catch (e: any) { ok = false; out = String(e?.stdout ?? '') + String(e?.stderr ?? e?.message ?? ''); }
+      return json({ ok, output: out.slice(0, 2000) });
     }
 
     if (url.pathname === '/api/state') {
@@ -1529,6 +1554,9 @@ const HTML = /* html */ `<!doctype html>
   .chip.folder-gone { display:inline-flex; align-items:center; gap:4px; color:var(--red); background:var(--red-soft); border:0; cursor:pointer; font-family:var(--body); }
   .chip.folder-gone svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .chip.folder-gone:hover { filter:brightness(1.05); }
+  .upd-pill { display:inline-flex; align-items:center; gap:5px; background:var(--clay-soft); color:var(--clay); border:none; border-radius:999px; padding:6px 12px; font-family:var(--body); font-weight:600; font-size:12.5px; cursor:pointer; white-space:nowrap; }
+  .upd-pill svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .upd-pill:hover { filter:brightness(1.06); }
   .menu-item svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
   .info-row { display:flex; gap:var(--s4); padding:7px 0; border-top:1px solid var(--line); font-size:13px; }
   .info-row:first-child { border-top:0; }
@@ -1664,6 +1692,7 @@ const HTML = /* html */ `<!doctype html>
       <h1><span class="dot" id="status-dot"></span> AgentDeck</h1>
       <div class="hdr-right">
         <span class="acct-row" id="acct"></span>
+        <button class="upd-pill" id="upd-pill" onclick="doUpdate()" style="display:none"></button>
         <button class="btn btn-ghost btn-icon" id="lang-btn" onclick="toggleLang()" title="English / Português">PT</button>
         <button class="btn btn-ghost btn-icon" id="theme-btn" onclick="toggleTheme()" title="Alternar tema claro/escuro">
           <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
@@ -1913,6 +1942,13 @@ const I18N = {
   'sessão não encontrada': 'session not found',
   'falha ao mover a sessão': 'failed to move the session',
   'falha ao atualizar a sessão': 'failed to update the session',
+  // — auto-update —
+  'Atualizar app': 'Update app',
+  'Atualização disponível': 'Update available',
+  'Atualizando…': 'Updating…',
+  'Atualizado — reabrir': 'Updated — reopen',
+  'Atualizado! Feche e reabra o painel pra aplicar': 'Updated! Close and reopen the panel to apply',
+  'Falha ao atualizar — rode git pull manualmente': 'Update failed — run git pull manually',
   // — abas, cabeçalho, botões fixos —
   'Sessões': 'Sessions',
   'Processos': 'Processes',
@@ -2605,6 +2641,30 @@ function closePanel() {
   setTimeout(() => toast(t('Feche a janela com Ctrl+W'), 'err'), 250);
 }
 
+// ── Auto-update (git) ──
+async function checkUpdate() {
+  let r; try { r = await (await fetch('/api/update-check')).json(); } catch { return; }
+  if (!r || !r.isGit || !r.hasUpstream || !(r.behind > 0)) return;
+  const pill = document.getElementById('upd-pill');
+  pill.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg> ' + t('Atualizar app') + ' (' + r.behind + ')';
+  pill.title = t('Atualização disponível') + ' — ' + r.behind + ' commit(s)';
+  pill.style.display = '';
+}
+async function doUpdate() {
+  const pill = document.getElementById('upd-pill');
+  pill.disabled = true; pill.textContent = t('Atualizando…');
+  let r; try { r = await (await fetch('/api/update', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' })).json(); } catch {}
+  pill.disabled = false;
+  if (r && r.ok) {
+    pill.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> ' + t('Atualizado — reabrir');
+    pill.onclick = closePanel; // reabrir pelo ícone carrega o código novo
+    toast(t('Atualizado! Feche e reabra o painel pra aplicar'), 'ok');
+  } else {
+    pill.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg> ' + t('Atualizar app');
+    toast(t('Falha ao atualizar — rode git pull manualmente'), 'err');
+  }
+}
+
 async function refresh() {
   let data;
   try { data = await (await fetch('/api/state')).json(); }
@@ -3113,6 +3173,7 @@ startPoll();
 loadAccount(); // chip de conta no cabeçalho (uma leitura, não entra no poll)
 loadWorkspaces(); // popula o badge de Workspaces e os dados pro modal de nova sessão
 applyAccent(); // acento inicial pelo mix de fontes (default: só Claude → laranja)
+checkUpdate(); // mostra o "Atualizar app" se o repo estiver atrás do remoto
 
 // atalhos de teclado na aba Sessões: '/' foca a busca, Esc limpa, Enter retoma a 1ª.
 document.addEventListener('keydown', (e) => {
