@@ -240,6 +240,7 @@ type Session = {
   fav: boolean;
   pinned: boolean;
   live: boolean; // sendo escrita agora ou citada por um processo vivo
+  folderMissing: boolean; // a pasta onde a sessão rodou não existe mais (foi apagada/movida)
   source: Source;
 };
 
@@ -474,7 +475,7 @@ const claudeSessions = async (archived: Set<string>, names: Record<string, strin
     const c = claudeCache.get(f.path) ?? { autoTitle: '(sem título)', folder: decodeDir(f.dir), lastMsg: '', origin: '', usage: null };
     const key = archKey('claude', f.id);
     const custom = names[key];
-    return { id: f.id, title: custom ?? c.autoTitle, autoTitle: c.autoTitle, renamed: custom != null, folder: c.folder, lastMsg: c.lastMsg, origin: c.origin, usage: c.usage, mtime: f.mtime, archived: archived.has(key), fav: flags.fav.has(key), pinned: flags.pin.has(key), live: false, source: 'claude' };
+    return { id: f.id, title: custom ?? c.autoTitle, autoTitle: c.autoTitle, renamed: custom != null, folder: c.folder, lastMsg: c.lastMsg, origin: c.origin, usage: c.usage, mtime: f.mtime, archived: archived.has(key), fav: flags.fav.has(key), pinned: flags.pin.has(key), live: false, folderMissing: !!c.folder && !existsSync(c.folder), source: 'claude' };
   });
 };
 
@@ -541,7 +542,7 @@ const codexSessions = async (archived: Set<string>, names: Record<string, string
       }
       const key = archKey('codex', id);
       const custom = names[key];
-      return { id, title: custom ?? cached.autoTitle, autoTitle: cached.autoTitle, renamed: custom != null, folder: cached.folder, lastMsg: cached.lastMsg, origin: cached.origin, usage: cached.usage, mtime, archived: archived.has(key), fav: flags.fav.has(key), pinned: flags.pin.has(key), live: false, source: 'codex' };
+      return { id, title: custom ?? cached.autoTitle, autoTitle: cached.autoTitle, renamed: custom != null, folder: cached.folder, lastMsg: cached.lastMsg, origin: cached.origin, usage: cached.usage, mtime, archived: archived.has(key), fav: flags.fav.has(key), pinned: flags.pin.has(key), live: false, folderMissing: !!cached.folder && !existsSync(cached.folder), source: 'codex' };
     }),
   );
   pruneCache(codexCache, paths);
@@ -669,6 +670,10 @@ export const foreignPointers = (text: string, oldUser: string): { path: string; 
 };
 
 // Localiza o arquivo de uma sessão pelo id.
+// cwd -> nome da pasta de projeto do Claude (cada char não-alfanumérico vira '-').
+// Ex.: /home/he/Área de trabalho -> -home-he--rea-de-trabalho (regra confirmada nos dados).
+const encodeCwd = (p: string): string => p.replace(/[^a-zA-Z0-9]/g, '-');
+
 const locateClaude = (id: string): { path: string; projectDir: string } | null => {
   let dirs: string[];
   try {
@@ -1211,6 +1216,42 @@ Bun.serve({
       return json({ ok: true, removed });
     }
 
+    // redireciona uma sessão pra outra pasta (quando a original foi apagada/movida).
+    // Claude indexa por pasta-codificada → move o transcript pro slot da nova pasta e
+    // ajusta os campos "cwd". Codex resume é por id → só atualiza o cwd no rollout.
+    if (url.pathname === '/api/relocate-session' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as { id?: string; source?: Source; newFolder?: string };
+      const id = (body.id ?? '').trim();
+      if (!/^[A-Za-z0-9._-]+$/.test(id)) return json({ ok: false, error: 'id inválido' }, 400);
+      const newFolder = (body.newFolder ?? '').trim();
+      if (!newFolder || !existsSync(newFolder)) return json({ ok: false, error: 'pasta inexistente' }, 400);
+      const source: Source = body.source === 'codex' ? 'codex' : 'claude';
+      const swapCwd = (content: string): string => {
+        const m = content.match(/"cwd":"((?:[^"\\]|\\.)*)"/);
+        if (!m) return content;
+        const oldCwd = JSON.parse('"' + m[1] + '"');
+        return content.split('"cwd":' + JSON.stringify(oldCwd)).join('"cwd":' + JSON.stringify(newFolder));
+      };
+      if (source === 'claude') {
+        const loc = locateClaude(id);
+        if (!loc || !within(PROJECTS_DIR, loc.path)) return json({ ok: false, error: 'sessão não encontrada' }, 404);
+        const newDir = join(PROJECTS_DIR, encodeCwd(newFolder));
+        const newPath = join(newDir, id + '.jsonl');
+        if (!within(PROJECTS_DIR, newPath)) return json({ ok: false, error: 'destino inválido' }, 400);
+        try {
+          const content = swapCwd(readFileSync(loc.path, 'utf8'));
+          mkdirSync(newDir, { recursive: true });
+          writeFileSync(newPath, content);
+          if (resolve(newPath) !== resolve(loc.path)) rmSync(loc.path, { force: true });
+        } catch { return json({ ok: false, error: 'falha ao mover a sessão' }, 500); }
+        return json({ ok: true });
+      }
+      const loc = locateCodex(id);
+      if (!loc || !within(CODEX_DIR, loc.path)) return json({ ok: false, error: 'sessão não encontrada' }, 404);
+      try { writeFileSync(loc.path, swapCwd(readFileSync(loc.path, 'utf8'))); } catch { return json({ ok: false, error: 'falha ao atualizar a sessão' }, 500); }
+      return json({ ok: true });
+    }
+
     if (url.pathname === '/api/kill' && req.method === 'POST') {
       const body = (await req.json().catch(() => ({}))) as { pid?: number; port?: number; container?: string };
       if (body.container) {
@@ -1485,6 +1526,9 @@ const HTML = /* html */ `<!doctype html>
   .menu-item.danger { color:var(--red); }
   .menu-item.danger:hover { background:var(--red-soft); }
   .del-target { font-weight:600; color:var(--ink); background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 12px; margin:var(--s3) 0; font-size:14px; word-break:break-word; }
+  .chip.folder-gone { display:inline-flex; align-items:center; gap:4px; color:var(--red); background:var(--red-soft); border:0; cursor:pointer; font-family:var(--body); }
+  .chip.folder-gone svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .chip.folder-gone:hover { filter:brightness(1.05); }
   .menu-item svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; }
   .info-row { display:flex; gap:var(--s4); padding:7px 0; border-top:1px solid var(--line); font-size:13px; }
   .info-row:first-child { border-top:0; }
@@ -1802,6 +1846,25 @@ const HTML = /* html */ `<!doctype html>
       </div>
     </div>
 
+    <div class="modal-bg" id="reloc-modal" onclick="if(event.target===this)closeReloc()">
+      <div class="modal">
+        <div class="modal-head">
+          <h2 class="section-title" style="margin:0">Pasta deletada</h2>
+          <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeReloc()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
+        </div>
+        <p class="hint">A pasta onde esta sessão foi iniciada não existe mais. O histórico está salvo (em ~/.claude) — escolha uma pasta pra redirecionar a sessão pra lá.</p>
+        <div class="del-target" id="reloc-old"></div>
+        <div class="run-form">
+          <input class="filter" id="reloc-folder" placeholder="nova pasta… (ex.: /home/você/projeto)" />
+          <button class="btn btn-ghost btn-icon" onclick="pickFolder('reloc-folder')" title="Escolher pasta"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+        </div>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" onclick="closeReloc()">Cancelar</button>
+          <button class="btn btn-copy" onclick="doRelocate()">Redirecionar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="toasts" id="toasts"></div>
 
     <div class="modal-bg" id="help-modal" onclick="if(event.target===this)closeHelp()">
@@ -1838,6 +1901,18 @@ const I18N = {
   'Falha ao apagar': 'Delete failed',
   'Marque ao menos uma opção': 'Check at least one option',
   'id inválido': 'invalid id',
+  // — pasta deletada / redirecionar —
+  'pasta deletada': 'folder deleted',
+  'A pasta onde esta sessão rodou foi apagada — clique pra apontar pra outra': 'The folder this session ran in was deleted — click to point it elsewhere',
+  'Pasta deletada': 'Folder deleted',
+  'A pasta onde esta sessão foi iniciada não existe mais. O histórico está salvo (em ~/.claude) — escolha uma pasta pra redirecionar a sessão pra lá.': 'The folder this session started in no longer exists. The history is safe (in ~/.claude) — pick a folder to redirect the session there.',
+  'nova pasta… (ex.: /home/você/projeto)': 'new folder… (e.g. /home/you/project)',
+  'Redirecionar': 'Redirect',
+  'Sessão redirecionada': 'Session redirected',
+  'Falha ao redirecionar': 'Redirect failed',
+  'sessão não encontrada': 'session not found',
+  'falha ao mover a sessão': 'failed to move the session',
+  'falha ao atualizar a sessão': 'failed to update the session',
   // — abas, cabeçalho, botões fixos —
   'Sessões': 'Sessions',
   'Processos': 'Processes',
@@ -2804,6 +2879,7 @@ function renderSessions() {
           \${originLabel(s.origin) ? \`<span class="chip origin" title="\${esc(t('Sessão iniciada no'))} \${originLabel(s.origin)} \${esc(t('— dá pra retomar tanto no terminal quanto no VS Code'))}">\${originLabel(s.origin)}</span>\` : ''}
           \${s.live ? '<span class="chip live">● ' + t('ativa') + '</span>' : ''}
           <span class="chip folder clickable" title="\${esc(s.folder)} \${esc(t('— clique p/ filtrar por esta pasta'))}" onclick='filterByFolder(\${esc(JSON.stringify(s.folder))})'>\${esc(s.folder)}</span>
+          \${s.folderMissing ? \`<button class="chip folder-gone" title="\${esc(t('A pasta onde esta sessão rodou foi apagada — clique pra apontar pra outra'))}" onclick='relocateUI(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${esc(JSON.stringify(s.folder))})'><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg> \${t('pasta deletada')}</button>\` : ''}
           <span class="chip up">\${fmtAgo(s.mtime)}</span>
           \${s.usage && s.usage.turns ? \`<span class="chip tok" title="\${esc(t('saída (gerados):'))} \${fmtNum(s.usage.out)} · \${esc(t('entrada:'))} \${fmtNum(s.usage.in)} · \${esc(t('cache: criação'))} \${fmtNum(s.usage.cc)} + \${esc(t('leitura'))} \${fmtNum(s.usage.cr)} · \${s.usage.turns} \${esc(t('turnos'))}">\${fmtTok(s.usage.out)} \${t('tok')}</span>\` : ''}
           <span class="chip pid">\${esc(s.id.slice(0,8))}</span>
@@ -2880,6 +2956,25 @@ async function doDeleteSession() {
     closeDel(); renderSessions();
     toast(t('Sessão apagada'), 'ok');
   } else toast(r && r.error ? t(r.error) : t('Falha ao apagar'), 'err');
+}
+
+// ── Redirecionar sessão (pasta original apagada) ──
+let relocTarget = null;
+function relocateUI(id, source, oldFolder) {
+  relocTarget = { id, source };
+  document.getElementById('reloc-old').textContent = oldFolder;
+  document.getElementById('reloc-folder').value = '';
+  document.getElementById('reloc-modal').classList.add('open');
+  setTimeout(() => document.getElementById('reloc-folder').focus(), 0);
+}
+function closeReloc() { document.getElementById('reloc-modal').classList.remove('open'); relocTarget = null; }
+async function doRelocate() {
+  if (!relocTarget) return;
+  const newFolder = document.getElementById('reloc-folder').value.trim();
+  if (!newFolder) { toast(t('Escolha a pasta'), 'err'); return; }
+  let r; try { r = await (await fetch('/api/relocate-session', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ id: relocTarget.id, source: relocTarget.source, newFolder }) })).json(); } catch {}
+  if (r && r.ok) { closeReloc(); toast(t('Sessão redirecionada'), 'ok'); loadSessions(); }
+  else toast(r && r.error ? t(r.error) : t('Falha ao redirecionar'), 'err');
 }
 
 // ── Exportar (por sessão) ──
@@ -3027,6 +3122,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('help-modal').classList.contains('open')) { closeHelp(); return; }
   if (e.key === 'Escape' && document.getElementById('hist-modal').classList.contains('open')) { closeHistory(); return; }
   if (e.key === 'Escape' && document.getElementById('info-modal').classList.contains('open')) { closeInfo(); return; }
+  if (e.key === 'Escape' && document.getElementById('reloc-modal').classList.contains('open')) { closeReloc(); return; }
   if (e.key === 'Escape' && document.getElementById('del-modal').classList.contains('open')) { closeDel(); return; }
   if (e.key === 'Escape' && document.getElementById('imp-modal').classList.contains('open')) { closeImport(); return; }
   if (e.key === 'Escape' && document.querySelector('.menu.open')) { closeMenus(); return; }
