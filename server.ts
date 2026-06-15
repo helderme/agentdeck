@@ -887,6 +887,8 @@ const sessionInfo = (source: Source, id: string): { ok: boolean; title?: string;
 // ─── Seletor de pasta nativo do SO ───────────────────────────────────────
 // detecta binário no PATH sem spawnar `which` (que pode não existir em minimal/Debian 13)
 const hasBin = (bin: string): boolean => { try { return !!Bun.which(bin); } catch { return false; } };
+// editor estilo VS Code: tenta o oficial, depois VSCodium (codium), depois Insiders
+const editorBin = (): string | null => ['code', 'codium', 'code-insiders'].find((b) => hasBin(b)) ?? null;
 // abre o diálogo nativo (zenity/kdialog/yad) e devolve o caminho absoluto escolhido.
 // async (spawn) pra não travar o servidor enquanto o diálogo está aberto.
 const pickFolder = (): Promise<{ ok: boolean; path?: string; error?: string }> => {
@@ -1021,15 +1023,17 @@ Bun.serve({
     if (url.pathname === '/api/open' && req.method === 'POST') {
       const body = (await req.json().catch(() => ({}))) as { folder?: string; session?: string; source?: Source };
       if (!body.folder || typeof body.folder !== 'string') return json({ ok: false, error: 'folder requerido' }, 400);
-      if (!hasBin('code')) return json({ ok: false, error: 'VS Code (`code`) não encontrado no PATH' });
-      // '--' garante que um folder começando com '-' seja tratado como caminho, não flag do `code`.
-      runBg('code', ['--', body.folder]); // abre a pasta no VS Code sem passar pelo shell
+      const editor = editorBin();
+      if (!editor) return json({ ok: false, error: 'VS Code/VSCodium não encontrado' });
+      // '--' garante que um folder começando com '-' seja tratado como caminho, não flag.
+      runBg(editor, ['--', body.folder]); // abre a pasta no editor sem passar pelo shell
       // Claude: além da pasta, abre a conversa na extensão via deep link. A extensão
-      // do Claude Code registra um URI handler vscode://anthropic.claude-code/open?session=<id>;
+      // do Claude Code registra um URI handler <scheme>://anthropic.claude-code/open?session=<id>;
       // a sessão tem que pertencer ao workspace aberto, então disparamos depois que a
       // pasta abriu (o setTimeout vive no processo do servidor, que é de longa duração).
       if (body.source !== 'codex' && typeof body.session === 'string' && /^[A-Za-z0-9._-]+$/.test(body.session)) {
-        const uri = `vscode://anthropic.claude-code/open?session=${body.session}`;
+        const scheme = editor === 'codium' ? 'vscodium' : 'vscode';
+        const uri = `${scheme}://anthropic.claude-code/open?session=${body.session}`;
         const opener = platform() === 'darwin' ? 'open' : 'xdg-open';
         setTimeout(() => runBg(opener, [uri]), 1500); // sem shell — argv direto
       }
@@ -1241,8 +1245,9 @@ Bun.serve({
       const body = (await req.json().catch(() => ({}))) as { name?: string };
       const ws = readWorkspaces().find((w) => w.name === body.name);
       if (!ws || !ws.folders.length) return json({ ok: false, error: 'workspace vazio' }, 400);
-      if (!hasBin('code')) return json({ ok: false, error: 'VS Code (`code`) não encontrado no PATH' });
-      runBg('code', ['--', ...ws.folders]); // abre todas as pastas numa janela multi-root do VS Code
+      const editor = editorBin();
+      if (!editor) return json({ ok: false, error: 'VS Code/VSCodium não encontrado' });
+      runBg(editor, ['--', ...ws.folders]); // abre todas as pastas numa janela multi-root
       return json({ ok: true });
     }
     if (url.pathname === '/api/history/pin' && req.method === 'POST') {
@@ -2014,7 +2019,7 @@ const I18N = {
   'origem não permitida': 'origin not allowed',
   'id inválido': 'invalid id',
   'folder requerido': 'folder required',
-  'VS Code (\`code\`) não encontrado no PATH': 'VS Code (\`code\`) not found in PATH',
+  'VS Code/VSCodium não encontrado': 'VS Code/VSCodium not found',
   'arquivo de importação inválido': 'invalid import file',
   'caminho inseguro no bundle (rejeitado)': 'unsafe path in bundle (rejected)',
   'id e flag (fav|pin) requeridos': 'id and flag (fav|pin) required',
