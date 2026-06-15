@@ -7,8 +7,10 @@
 cd "$(dirname "$(readlink -f "$0")")" || exit 1
 # o GNOME não carrega ~/.bashrc, então o PATH gráfico pode não ter bun nem ~/.local/bin
 export PATH="$HOME/.bun/bin:$HOME/.local/bin:$PATH"
-URL="http://localhost:7799"
-PORT=7799
+# porta configurável (mesma var que o server.ts lê); default 7799
+export AGENTDECK_PORT="${AGENTDECK_PORT:-7799}"
+PORT="$AGENTDECK_PORT"
+URL="http://localhost:$PORT"
 
 listening() { ss -ltn 2>/dev/null | grep -q ":$PORT "; }
 

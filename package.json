@@ -1,11 +1,20 @@
 {
   "name": "agentdeck",
   "version": "1.0.0",
-  "private": true,
   "description": "Painel local pra listar/retomar sessões do Claude Code e Codex e ver/finalizar processos em background.",
   "license": "MIT",
   "author": "Helder Medeiros",
-  "repository": "github:medeiroshelder/agentdeck",
+  "repository": "github:helderme/agentdeck",
+  "homepage": "https://helderme.github.io/agentdeck/",
+  "keywords": [
+    "claude-code",
+    "codex",
+    "ai-agents",
+    "sessions",
+    "bun",
+    "linux",
+    "dashboard"
+  ],
   "scripts": {
     "start": "bun server.ts",
     "check": "tsc --noEmit",

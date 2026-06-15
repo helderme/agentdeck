@@ -12,9 +12,12 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, renameS
 import { homedir, hostname, platform, userInfo } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 
-const PORT = 7799;
+const PORT = Number(process.env.AGENTDECK_PORT) || 7799;
 // origens aceitas nos POSTs — barra CSRF de qualquer página aberta na máquina
 const ALLOWED_ORIGINS = new Set([`http://localhost:${PORT}`, `http://127.0.0.1:${PORT}`]);
+// hosts loopback aceitos no header Host — barra DNS rebinding (uma página externa que
+// reaponta seu domínio pra 127.0.0.1 manda Host=dominio-do-atacante, não loopback)
+const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`, `[::1]:${PORT}`]);
 const SNAPSHOT_MARK = '.claude/shell-snapshots';
 // marca que entra nos args (via $0 do `bash -c`) dos processos reiniciados pelo AgentDeck,
 // pra eles continuarem aparecendo na lista mesmo sem a assinatura do shell do Claude.
@@ -252,6 +255,7 @@ const readJson = <T>(path: string, fallback: T): T => {
 };
 const writeJsonAtomic = (path: string, data: unknown): void => {
   try {
+    mkdirSync(dirname(path), { recursive: true }); // ~/.claude pode não existir (ex.: só Codex)
     const tmp = path + '.tmp';
     writeFileSync(tmp, JSON.stringify(data, null, 2));
     renameSync(tmp, path);
@@ -881,7 +885,8 @@ const sessionInfo = (source: Source, id: string): { ok: boolean; title?: string;
 };
 
 // ─── Seletor de pasta nativo do SO ───────────────────────────────────────
-const hasBin = (bin: string): boolean => { try { execFileSync('which', [bin], { stdio: 'ignore' }); return true; } catch { return false; } };
+// detecta binário no PATH sem spawnar `which` (que pode não existir em minimal/Debian 13)
+const hasBin = (bin: string): boolean => { try { return !!Bun.which(bin); } catch { return false; } };
 // abre o diálogo nativo (zenity/kdialog/yad) e devolve o caminho absoluto escolhido.
 // async (spawn) pra não travar o servidor enquanto o diálogo está aberto.
 const pickFolder = (): Promise<{ ok: boolean; path?: string; error?: string }> => {
@@ -956,22 +961,30 @@ const json = (data: unknown, status = 200) =>
 
 // `bun server.ts` sobe o servidor; `import` (ex. nos testes) não — só expõe as funções puras.
 if (import.meta.main) {
+try {
 Bun.serve({
   port: PORT,
   hostname: '127.0.0.1',
   async fetch(req) {
     const url = new URL(req.url);
 
-    // CSRF: bloqueia POSTs de outra origem (kill/open/import). req.json() aceita
-    // corpo text/plain (simple request, sem preflight), então Origin/Sec-Fetch-Site
-    // é a barreira contra páginas web maliciosas — navegador sempre manda Origin em
-    // POST cross-origin e Sec-Fetch-Site em toda request, então o ataque real é
-    // barrado. (Um cliente local sem headers — curl/script — ainda passa, mas isso
-    // exige acesso local à máquina, fora do modelo de ameaça do navegador.)
+    // DNS rebinding: o servidor só atende loopback, então um Host que não seja
+    // localhost/127.0.0.1/[::1] na nossa porta é uma página externa que reapontou o DNS
+    // pra cá. Barra em TODA request — inclui os GET (conta/sessões leem dados sensíveis).
+    const host = req.headers.get('host');
+    if (host && !ALLOWED_HOSTS.has(host)) {
+      return json({ ok: false, error: 'host não permitido' }, 403);
+    }
+
+    // CSRF (fail-closed): todo POST precisa AFIRMAR mesma-origem via Origin OU Sec-Fetch-Site.
+    // Navegador sempre manda Sec-Fetch-Site=same-origin nas nossas chamadas; a ausência dos
+    // dois sinais não é a nossa página → barra (kill/run/open/import etc.).
     if (req.method === 'POST') {
       const origin = req.headers.get('origin');
       const site = req.headers.get('sec-fetch-site');
-      if ((origin && !ALLOWED_ORIGINS.has(origin)) || (site && site !== 'same-origin')) {
+      const okOrigin = origin ? ALLOWED_ORIGINS.has(origin) : false;
+      const okSite = site ? site === 'same-origin' : false;
+      if (!okOrigin && !okSite) {
         return json({ ok: false, error: 'origem não permitida' }, 403);
       }
     }
@@ -1008,6 +1021,7 @@ Bun.serve({
     if (url.pathname === '/api/open' && req.method === 'POST') {
       const body = (await req.json().catch(() => ({}))) as { folder?: string; session?: string; source?: Source };
       if (!body.folder || typeof body.folder !== 'string') return json({ ok: false, error: 'folder requerido' }, 400);
+      if (!hasBin('code')) return json({ ok: false, error: 'VS Code (`code`) não encontrado no PATH' });
       // '--' garante que um folder começando com '-' seja tratado como caminho, não flag do `code`.
       runBg('code', ['--', body.folder]); // abre a pasta no VS Code sem passar pelo shell
       // Claude: além da pasta, abre a conversa na extensão via deep link. A extensão
@@ -1024,7 +1038,10 @@ Bun.serve({
 
     if (url.pathname === '/api/export' && req.method === 'POST') {
       const body = (await req.json().catch(() => ({}))) as { items?: { source: Source; id: string }[]; scanSecrets?: boolean };
-      const items = Array.isArray(body.items) ? body.items : [];
+      // valida o id (igual ao /api/session-info) — sem isso um id com ../ leria .jsonl fora da base
+      const items = (Array.isArray(body.items) ? body.items : []).filter(
+        (it) => it && typeof it.id === 'string' && /^[A-Za-z0-9._-]+$/.test(it.id),
+      );
       const sessions = buildExport(items, body.scanSecrets !== false);
       return json({
         format: 'agentdeck/sessions',
@@ -1164,14 +1181,12 @@ Bun.serve({
       const body = (await req.json().catch(() => ({}))) as { pid?: number; port?: number; container?: string };
       if (body.container) {
         if (typeof body.container !== 'string' || !/^[A-Za-z0-9][\w.-]*$/.test(body.container)) return json({ ok: false, error: 'container inválido' }, 400);
-        run('docker', ['stop', body.container]);
-        return json({ ok: true });
+        return json(run('docker', ['stop', body.container]) ? { ok: true } : { ok: false, error: 'docker indisponível (não consegui parar o container)' });
       }
       if (body.port != null) {
         const port = Number(body.port);
         if (!Number.isInteger(port) || port < 1 || port > 65535) return json({ ok: false, error: 'porta inválida' }, 400);
-        run('fuser', ['-k', `${port}/tcp`]);
-        return json({ ok: true });
+        return json(run('fuser', ['-k', `${port}/tcp`]) ? { ok: true } : { ok: false, error: 'não consegui matar pela porta (precisa do `fuser`, pacote psmisc)' });
       }
       if (body.pid != null) {
         const pid = Number(body.pid);
@@ -1226,6 +1241,7 @@ Bun.serve({
       const body = (await req.json().catch(() => ({}))) as { name?: string };
       const ws = readWorkspaces().find((w) => w.name === body.name);
       if (!ws || !ws.folders.length) return json({ ok: false, error: 'workspace vazio' }, 400);
+      if (!hasBin('code')) return json({ ok: false, error: 'VS Code (`code`) não encontrado no PATH' });
       runBg('code', ['--', ...ws.folders]); // abre todas as pastas numa janela multi-root do VS Code
       return json({ ok: true });
     }
@@ -1276,6 +1292,13 @@ Bun.serve({
 });
 
 console.log(`\n  AgentDeck → http://localhost:${PORT}\n  (Ctrl+C pra parar este painel — não afeta os processos do Claude)\n`);
+} catch (e: any) {
+  const inUse = e?.code === 'EADDRINUSE' || /in use|EADDRINUSE/i.test(String(e?.message ?? e));
+  console.error(inUse
+    ? `\n  ✗ A porta ${PORT} já está em uso. Feche o que está usando ela, ou rode em outra porta:\n      AGENTDECK_PORT=8080 bun server.ts\n`
+    : `\n  ✗ Falha ao subir o AgentDeck:\n  ${e}\n`);
+  process.exit(1);
+}
 }
 
 const HTML = /* html */ `<!doctype html>
@@ -1808,7 +1831,11 @@ async function kill(payload, cmd, cwd) {
     ? 'Parar este container?\\n\\n' + payload.container
     : 'Finalizar este processo?\\n\\n' + cmd + (cwd ? '\\n' + cwd : '');
   if (!(await askConfirm(msg, { danger: true, okLabel: isContainer ? 'Parar' : 'Finalizar' }))) return;
-  try { await fetch('/api/kill', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) }); toast(isContainer ? 'Container parado' : 'Finalizado', 'ok'); } catch { toast('Falha', 'err'); }
+  try {
+    const r = await (await fetch('/api/kill', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload) })).json();
+    if (r && r.ok) toast(isContainer ? 'Container parado' : 'Finalizado', 'ok');
+    else toast(r && r.error ? r.error : 'Falha', 'err');
+  } catch { toast('Falha', 'err'); }
   setTimeout(refresh, 400);
 }
 
@@ -1997,7 +2024,11 @@ function renderWorkspaces() {
     </div>\`; }).join('');
 }
 async function openWorkspaceVSCode(name) {
-  try { await fetch('/api/open-workspace', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ name }) }); toast('Abrindo no VS Code…', 'ok'); } catch { toast('Falha', 'err'); }
+  try {
+    const r = await (await fetch('/api/open-workspace', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ name }) })).json();
+    if (r && r.ok) toast('Abrindo no VS Code…', 'ok');
+    else toast(r && r.error ? r.error : 'Falha', 'err');
+  } catch { toast('Falha', 'err'); }
 }
 async function deleteWorkspaceUI(name) {
   if (!(await askConfirm('Excluir o workspace "' + name + '"?\\n\\n(as pastas e sessões não são tocadas)', { danger: true, okLabel: 'Excluir' }))) return;
@@ -2435,8 +2466,10 @@ function renderSessions() {
 
 async function openIn(folder, id, source, btn) {
   btn.disabled = true;
-  try { await fetch('/api/open', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ folder, session: id, source }) }); }
-  catch {}
+  try {
+    const r = await (await fetch('/api/open', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ folder, session: id, source }) })).json();
+    if (r && !r.ok) toast(r.error || 'não consegui abrir o VS Code', 'err');
+  } catch {}
   setTimeout(() => { btn.disabled = false; }, 600);
 }
 

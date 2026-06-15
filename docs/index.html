@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AgentDeck — painel local pra Claude Code e Codex</title>
+<meta name="description" content="Painel local pra listar, retomar e abrir sessões do Claude Code e do Codex, montar workspaces multi-repo e ver/finalizar processos em background. Roda 100% local no Linux." />
+<meta property="og:title" content="AgentDeck" />
+<meta property="og:description" content="Liste, retome e abra suas sessões do Claude Code e Codex. Workspaces multi-repo e processos em background. 100% local." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://helderme.github.io/agentdeck/" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%23b65f3c'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* warm-paper (claro) — mesmos tokens OKLCH do app */
+    --bg: oklch(97% 0.008 85); --surface: oklch(99.5% 0.003 85); --surface-2: oklch(94% 0.008 80);
+    --line: oklch(88% 0.01 80); --ink: oklch(28% 0.02 60); --muted: oklch(51% 0.02 65);
+    --clay: oklch(56% 0.14 45); --clay-ink: oklch(99% 0.01 85); --clay-soft: oklch(56% 0.14 45 / .1);
+    --green: oklch(50% 0.14 155); --blue: oklch(52% 0.15 250);
+    --display: "Fraunces", Georgia, serif; --body: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:36px; --s7:56px; --s8:88px; --r:16px; --r-sm:8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: oklch(20% 0.006 70); --surface: oklch(24% 0.006 70); --surface-2: oklch(28% 0.008 72);
+      --line: oklch(33% 0.009 75); --ink: oklch(95% 0.008 85); --muted: oklch(70% 0.013 75);
+      --clay: oklch(72% 0.115 50); --clay-ink: oklch(22% 0.04 50); --clay-soft: oklch(72% 0.115 50 / .14);
+      --green: oklch(77% 0.1 160); --blue: oklch(72% 0.11 240);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scrollbar-color: var(--clay) transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body);
+    font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--clay); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 var(--s5); }
+  code, pre { font-family: var(--mono); }
+
+  /* top bar */
+  nav { display: flex; align-items: center; justify-content: space-between; padding: var(--s5) 0; }
+  .brand { display: flex; align-items: center; gap: var(--s3); font-family: var(--display); font-weight: 600; font-size: 20px; color: var(--ink); }
+  .brand svg { width: 30px; height: 30px; border-radius: 7px; }
+  nav .links { display: flex; gap: var(--s5); align-items: center; font-weight: 500; font-size: 15px; }
+  nav .links a { color: var(--muted); }
+  nav .links a:hover { color: var(--ink); text-decoration: none; }
+
+  /* hero */
+  header.hero { padding: var(--s7) 0 var(--s8); text-align: center; }
+  header.hero .icon { width: 84px; height: 84px; border-radius: 20px; margin-bottom: var(--s5); }
+  h1 { font-family: var(--display); font-weight: 600; font-size: clamp(40px, 7vw, 68px); line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 var(--s4); }
+  .tagline { font-size: clamp(18px, 2.4vw, 22px); color: var(--muted); max-width: 620px; margin: 0 auto var(--s6); }
+  .tagline b { color: var(--ink); font-weight: 600; }
+  .cta { display: flex; gap: var(--s3); justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: var(--s2); padding: 12px 22px; border-radius: var(--r-sm); font: inherit; font-weight: 600; font-size: 16px; cursor: pointer; border: 1px solid transparent; }
+  .btn-primary { background: var(--clay); color: var(--clay-ink); }
+  .btn-primary:hover { filter: brightness(1.06); text-decoration: none; }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover { border-color: var(--muted); text-decoration: none; }
+  .btn svg { width: 18px; height: 18px; }
+  .local-note { margin-top: var(--s5); font-size: 14px; color: var(--muted); }
+  .local-note b { color: var(--green); }
+
+  section { padding: var(--s7) 0; border-top: 1px solid var(--line); }
+  h2 { font-family: var(--display); font-weight: 600; font-size: clamp(26px, 4vw, 34px); letter-spacing: -0.01em; margin: 0 0 var(--s2); }
+  .sub { color: var(--muted); margin: 0 0 var(--s6); font-size: 17px; }
+
+  /* pillars */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--s4); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: var(--s5); }
+  .card .ic { width: 30px; height: 30px; color: var(--clay); margin-bottom: var(--s3); }
+  .card .ic svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .card h3 { font-family: var(--display); font-weight: 600; font-size: 20px; margin: 0 0 var(--s2); }
+  .card p { margin: 0; color: var(--muted); font-size: 15.5px; line-height: 1.6; }
+
+  pre { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--s4) var(--s5); overflow-x: auto; font-size: 14.5px; line-height: 1.7; color: var(--ink); }
+  pre .c { color: var(--muted); }
+  pre .p { color: var(--clay); }
+  p.hint { color: var(--muted); font-size: 14.5px; }
+  p.hint code, li code, td code { background: var(--surface-2); border-radius: 5px; padding: 1px 6px; font-size: 0.85em; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td:first-child { white-space: nowrap; font-weight: 600; }
+  td.opt:first-child { font-weight: 500; color: var(--muted); }
+
+  ul.sec { list-style: none; padding: 0; margin: 0; display: grid; gap: var(--s3); }
+  ul.sec li { display: flex; gap: var(--s3); align-items: flex-start; color: var(--muted); }
+  ul.sec li b { color: var(--ink); font-weight: 600; }
+  ul.sec .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--clay); margin-top: 9px; }
+
+  footer { border-top: 1px solid var(--line); padding: var(--s6) 0 var(--s7); color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--s3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <nav>
+    <span class="brand">
+      <svg viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#b65f3c"/><g transform="translate(256 262)"><rect x="-135" y="-82" width="270" height="165" rx="26" fill="#e6d4c2" transform="rotate(-8)"/><rect x="-135" y="-82" width="270" height="165" rx="26" fill="#f4ebe0" transform="rotate(5)"/><rect x="-135" y="-82" width="270" height="165" rx="26" fill="#fffaf3"/><rect x="-98" y="-50" width="150" height="20" rx="10" fill="#b65f3c"/><rect x="-98" y="-12" width="196" height="13" rx="6.5" fill="#c9b4a1"/><rect x="-98" y="16" width="160" height="13" rx="6.5" fill="#c9b4a1"/><circle cx="92" cy="-42" r="13" fill="#3c9a6b"/></g></svg>
+      AgentDeck
+    </span>
+    <span class="links">
+      <a href="#comecar">Começar</a>
+      <a href="#features">Features</a>
+      <a href="https://github.com/helderme/agentdeck">GitHub ↗</a>
+    </span>
+  </nav>
+
+  <header class="hero">
+    <svg class="icon" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="112" fill="#b65f3c"/><g transform="translate(256 262)"><rect x="-135" y="-82" width="270" height="165" rx="26" fill="#e6d4c2" transform="rotate(-8)"/><rect x="-135" y="-82" width="270" height="165" rx="26" fill="#f4ebe0" transform="rotate(5)"/><rect x="-135" y="-82" width="270" height="165" rx="26" fill="#fffaf3"/><rect x="-98" y="-50" width="150" height="20" rx="10" fill="#b65f3c"/><rect x="-98" y="-12" width="196" height="13" rx="6.5" fill="#c9b4a1"/><rect x="-98" y="16" width="160" height="13" rx="6.5" fill="#c9b4a1"/><circle cx="92" cy="-42" r="13" fill="#3c9a6b"/></g></svg>
+    <h1>Suas sessões de agente,<br>em um deck.</h1>
+    <p class="tagline">Um painel local pra <b>listar, retomar e abrir</b> as sessões do
+      <b>Claude Code</b> e do <b>Codex</b>, montar <b>workspaces</b> multi-repo e
+      <b>ver/finalizar</b> o que ficou rodando em background.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#comecar">Começar</a>
+      <a class="btn btn-ghost" href="https://github.com/helderme/agentdeck">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+        Ver no GitHub
+      </a>
+    </div>
+    <p class="local-note">Roda <b>100% local</b> em <code>127.0.0.1</code> · Linux · só precisa do Bun</p>
+  </header>
+
+  <section id="features">
+    <h2>Três abas, zero caça a PID</h2>
+    <p class="sub">Tudo renderizado — você lê, retoma e gerencia sem decorar comando nem vasculhar o terminal.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div>
+        <h3>Sessões</h3>
+        <p>Lista as sessões do Claude Code e do Codex com título, pasta e "onde paramos".
+          Retoma num clique, abre no VS Code (pasta + a conversa na extensão), cria sessão
+          nova escolhendo agente, modelo, effort e modo. Favorita, fixa, arquiva, renomeia,
+          exporta/importa.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+        <h3>Workspaces</h3>
+        <p>Agrupe vários repos. Abra todos numa janela multi-root do VS Code, ou inicie
+          <b>uma sessão só</b> que enxerga todos eles (raiz + os outros via
+          <code>--add-dir</code>) — o multi-root no terminal.</p>
+      </div>
+      <div class="card">
+        <div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></div>
+        <h3>Processos</h3>
+        <p>O que ficou rodando em background — dev servers, containers — com PID, tempo,
+          porta e pasta. Finalize (por PID, porta ou container), reinicie, veja o log ou
+          inicie um processo novo.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="comecar">
+    <h2>Começar em ~2 minutos</h2>
+    <p class="sub">Só precisa do <a href="https://bun.sh">Bun</a>. É uma ferramenta de Linux.</p>
+<pre><span class="c"># 1) instale o Bun (uma vez só)</span>
+curl -fsSL https://bun.sh/install | bash
+
+<span class="c"># 2) clone e rode</span>
+git clone https://github.com/helderme/agentdeck.git
+cd agentdeck
+./start.sh</pre>
+    <p class="hint">O <code>start.sh</code> sobe o servidor e abre numa janela de app limpa.
+      Sem ele: <code>bun server.ts</code> e abra <code>http://localhost:7799</code>. Porta
+      ocupada? <code>AGENTDECK_PORT=8080 ./start.sh</code>. Pra um atalho no menu de
+      aplicativos, rode <code>./install.sh</code>.</p>
+  </section>
+
+  <section>
+    <h2>O que precisa instalado</h2>
+    <p class="sub">Só o Bun é obrigatório. Sem uma ferramenta opcional, só a feature dela some — o resto roda igual.</p>
+    <table>
+      <tr><th>Ferramenta</th><th>Pra quê</th></tr>
+      <tr><td>Bun</td><td>roda o servidor — único requisito</td></tr>
+      <tr><td class="opt"><code>claude</code> / <code>codex</code></td><td>abrir uma nova sessão e o comando de retomar (a listagem funciona sem eles)</td></tr>
+      <tr><td class="opt">Chrome / Chromium</td><td>janela de app limpa (sem ele, cai pro navegador padrão)</td></tr>
+      <tr><td class="opt">um terminal</td><td>abrir a nova sessão num terminal real</td></tr>
+      <tr><td class="opt"><code>code</code></td><td>botão Abrir no VS Code</td></tr>
+      <tr><td class="opt"><code>docker</code></td><td>listar/parar containers</td></tr>
+      <tr><td class="opt">zenity / kdialog</td><td>seletor de pasta nativo</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Seguro por padrão</h2>
+    <p class="sub">O painel executa comandos locais, então é desenhado pra nunca sair da sua máquina.</p>
+    <ul class="sec">
+      <li><span class="dot"></span><span><b>Só em <code>127.0.0.1</code></b> — nada exposto pra fora; não encaminhe a porta.</span></li>
+      <li><span class="dot"></span><span><b>Anti-rebinding e anti-CSRF</b> — valida o header <code>Host</code> e a origem de todo POST (fail-closed); uma página web aberta no navegador não aciona nada.</span></li>
+      <li><span class="dot"></span><span><b>Sem shell onde importa</b> — comandos externos rodam por <code>execFile</code> ou com aspas escapadas; <code>kill</code> só atua em processos reconhecidos.</span></li>
+      <li><span class="dot"></span><span><b>Nunca expõe o token</b> — do login só lê e-mail/plano, jamais a credencial.</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>MIT © Helder Medeiros</span>
+    <span><a href="https://github.com/helderme/agentdeck">github.com/helderme/agentdeck</a></span>
+  </footer>
+
+</div>
+</body>
+</html>
