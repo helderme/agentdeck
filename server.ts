@@ -2778,14 +2778,17 @@ async function openIn(folder, id, source, btn) {
 }
 
 function resume(folder, id, source, btn) {
-  const cmd = 'cd ' + JSON.stringify(folder) + (source === 'codex' ? ' && codex resume ' : ' && claude --resume ') + id;
+  // a sessão vive em ~/.claude (não na pasta do projeto); se a pasta foi apagada só o cd
+  // quebra, então mkdir -p recria ela (vazia) pra retomar o histórico — inócuo se já existe
+  const q = JSON.stringify(folder);
+  const cmd = 'mkdir -p ' + q + ' && cd ' + q + (source === 'codex' ? ' && codex resume ' : ' && claude --resume ') + id;
   navigator.clipboard.writeText(cmd).then(() => {
     if (!btn) return;
-    // botão é ícone (sem texto): troca o SVG por um ✓ e pisca verde, sem apagar o ícone
-    const old = btn.innerHTML, t = btn.title;
+    // botão é ícone (sem texto): troca o SVG por um ✓ e fica verde um tempinho, depois volta
+    const oldHtml = btn.innerHTML, oldTitle = btn.title;
     btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>';
     btn.classList.add('ok'); btn.title = t('comando copiado ✓');
-    setTimeout(() => { btn.innerHTML = old; btn.classList.remove('ok'); btn.title = t; }, 1200);
+    setTimeout(() => { btn.innerHTML = oldHtml; btn.classList.remove('ok'); btn.title = oldTitle; }, 2000);
   });
 }
 
