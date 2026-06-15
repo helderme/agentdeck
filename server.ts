@@ -937,6 +937,19 @@ const shq = (s: string): string => "'" + s.replace(/'/g, "'\\''") + "'";
 const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'minimal'];
 const CLAUDE_MODES = ['default', 'acceptEdits', 'plan', 'auto']; // --permission-mode
 const CODEX_MODES: Record<string, string> = { ask: '-a untrusted', approve: '-a on-request', full: '--dangerously-bypass-approvals-and-sandbox' };
+// abre um terminal rodando `cmd` na pasta `cwd` (bash -ic carrega o PATH do usuário: nvm etc.)
+const openTerminal = (cmd: string, cwd: string): boolean => {
+  const launch = (bin: string, args: string[]): boolean => {
+    try { spawn(bin, args, { detached: true, stdio: 'ignore' }).unref(); return true; } catch { return false; }
+  };
+  if (hasBin('gnome-terminal')) return launch('gnome-terminal', ['--working-directory=' + cwd, '--', 'bash', '-ic', cmd]);
+  const inner = 'cd ' + shq(cwd) + ' && ' + cmd;
+  for (const t of ['kgx', 'konsole', 'tilix', 'xfce4-terminal', 'x-terminal-emulator', 'xterm']) {
+    if (hasBin(t)) return launch(t, ['-e', 'bash', '-ic', inner]);
+  }
+  return false;
+};
+
 const newSession = (source: Source, folder: string, addDirs: string[] = [], opts: { model?: string; effort?: string; mode?: string } = {}): boolean => {
   if (!folder || !existsSync(folder)) return false;
   const agent = source === 'codex' ? 'codex' : 'claude';
@@ -959,15 +972,7 @@ const newSession = (source: Source, folder: string, addDirs: string[] = [], opts
     else if (CLAUDE_MODES.includes(mode)) optPart += ' --permission-mode ' + shq(mode);
   }
   const run = agent + optPart + addPart;             // ex.: claude --model 'opus' --effort 'high' --add-dir '/a'
-  const inner = 'cd ' + shq(folder) + ' && ' + run;
-  const launch = (bin: string, args: string[]): boolean => {
-    try { spawn(bin, args, { detached: true, stdio: 'ignore' }).unref(); return true; } catch { return false; }
-  };
-  if (hasBin('gnome-terminal')) return launch('gnome-terminal', ['--working-directory=' + folder, '--', 'bash', '-ic', run]);
-  for (const t of ['kgx', 'konsole', 'tilix', 'xfce4-terminal', 'x-terminal-emulator', 'xterm']) {
-    if (hasBin(t)) return launch(t, ['-e', 'bash', '-ic', inner]);
-  }
-  return false;
+  return openTerminal(run, folder);
 };
 
 const json = (data: unknown, status = 200) =>
@@ -1030,6 +1035,21 @@ Bun.serve({
       try { out = execFileSync('git', ['-C', REPO_DIR, 'pull', '--ff-only'], { encoding: 'utf8' }); }
       catch (e: any) { ok = false; out = String(e?.stdout ?? '') + String(e?.stderr ?? e?.message ?? ''); }
       return json({ ok, output: out.slice(0, 2000) });
+    }
+
+    // login: abre um terminal com o fluxo interativo (browser/OAuth) do CLI escolhido
+    if (url.pathname === '/api/login' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as { source?: Source };
+      const cmd = body.source === 'codex' ? 'codex login' : 'claude auth login';
+      return json({ ok: openTerminal(cmd, homedir()) });
+    }
+    // logout: remove as credenciais do CLI (não-interativo). Confirme no front antes.
+    if (url.pathname === '/api/logout' && req.method === 'POST') {
+      const body = (await req.json().catch(() => ({}))) as { source?: Source };
+      const codex = body.source === 'codex';
+      let ok = false;
+      try { execFileSync(codex ? 'codex' : 'claude', codex ? ['logout'] : ['auth', 'logout'], { stdio: 'ignore', timeout: 15000 }); ok = true; } catch { ok = false; }
+      return json(ok ? { ok: true } : { ok: false, error: 'falha no logout (CLI ausente?)' });
     }
 
     if (url.pathname === '/api/state') {
@@ -1464,6 +1484,13 @@ const HTML = /* html */ `<!doctype html>
   /* barra de painel offline: fixa no topo, sobre todas as abas */
   .offbar { position:fixed; top:0; left:0; right:0; z-index:100; display:none; align-items:center; justify-content:center; gap:var(--s3); padding:9px 16px; background:var(--red-soft); color:var(--red); border-bottom:1px solid color-mix(in oklch, var(--red) 45%, var(--line)); font-size:13px; font-weight:600; }
   .offbar.show { display:flex; }
+  .loginbar { position:fixed; top:0; left:0; right:0; z-index:100; display:none; align-items:center; justify-content:center; gap:var(--s3); padding:9px 16px; background:var(--clay-soft); color:var(--clay); border-bottom:1px solid color-mix(in oklch, var(--clay) 45%, var(--line)); font-size:13px; font-weight:600; }
+  .loginbar.show { display:flex; }
+  .loginbar svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .loginbar button { border:0; border-radius:var(--r-sm); padding:5px 12px; font-family:var(--body); font-weight:600; font-size:12.5px; cursor:pointer; color:#fff; }
+  .loginbar .lb-claude { background:var(--claude-brand); }
+  .loginbar .lb-codex { background:var(--codex-brand); }
+  .loginbar button:hover { filter:brightness(1.08); }
   .offbar svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .offbar button { background:var(--red); color:var(--bg); border:0; border-radius:var(--r-sm); padding:5px 13px; font-family:var(--body); font-weight:600; font-size:12.5px; cursor:pointer; }
   .offbar button:hover { filter:brightness(1.08); }
@@ -1687,12 +1714,22 @@ const HTML = /* html */ `<!doctype html>
     <span>Painel offline — reabra pelo ícone do AgentDeck</span>
     <button onclick="closePanel()">Fechar</button>
   </div>
+  <div class="loginbar" id="loginbar">
+    <svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+    <span>Nenhuma conta conectada</span>
+    <button class="lb-claude" onclick="doLogin('claude')">Entrar no Claude</button>
+    <button class="lb-codex" onclick="doLogin('codex')">Entrar no Codex</button>
+  </div>
   <div class="wrap">
     <header>
       <h1><span class="dot" id="status-dot"></span> AgentDeck</h1>
       <div class="hdr-right">
         <span class="acct-row" id="acct"></span>
         <button class="upd-pill" id="upd-pill" onclick="doUpdate()" style="display:none"></button>
+        <div class="kebab-wrap" style="position:relative">
+          <button class="btn btn-ghost btn-icon" id="gear-btn" onclick="toggleMenu(event, this)" title="Contas (login/logout)"><svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+          <div class="menu" id="gear-menu"></div>
+        </div>
         <button class="btn btn-ghost btn-icon" id="lang-btn" onclick="toggleLang()" title="English / Português">PT</button>
         <button class="btn btn-ghost btn-icon" id="theme-btn" onclick="toggleTheme()" title="Alternar tema claro/escuro">
           <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
@@ -1949,6 +1986,19 @@ const I18N = {
   'Atualizado — reabrir': 'Updated — reopen',
   'Atualizado! Feche e reabra o painel pra aplicar': 'Updated! Close and reopen the panel to apply',
   'Falha ao atualizar — rode git pull manualmente': 'Update failed — run git pull manually',
+  // — login / logout (contas) —
+  'Nenhuma conta conectada': 'No account connected',
+  'Entrar no Claude': 'Sign in to Claude',
+  'Entrar no Codex': 'Sign in to Codex',
+  'Entrar no': 'Sign in to',
+  'Sair do': 'Sign out of',
+  'Sair da conta': 'Sign out of',
+  'Sair': 'Sign out',
+  'Desconectado': 'Signed out',
+  'Falha no logout': 'Logout failed',
+  'falha no logout (CLI ausente?)': 'logout failed (CLI missing?)',
+  'Abrindo login no terminal — siga as instruções lá': 'Opening login in the terminal — follow the steps there',
+  'Contas (login/logout)': 'Accounts (login/logout)',
   // — abas, cabeçalho, botões fixos —
   'Sessões': 'Sessions',
   'Processos': 'Processes',
@@ -2250,7 +2300,7 @@ function i18nWalk(root) {
 function applyLang() {
   document.documentElement.lang = LANG === 'pt' ? 'pt-BR' : 'en';
   i18nWalk(document.body);
-  const b = document.getElementById('lang-btn'); if (b) b.textContent = LANG === 'pt' ? 'EN' : 'PT';
+  const b = document.getElementById('lang-btn'); if (b) b.textContent = LANG === 'pt' ? '🇧🇷' : '🇺🇸'; // bandeira do idioma atual
   document.body.style.visibility = 'visible';
 }
 function toggleLang() {
@@ -2806,6 +2856,38 @@ function renderAccount() {
     chips.push('<span class="acct codex" title="Codex">' + esc(label || 'Codex') + '</span>');
   }
   el.innerHTML = chips.join('');
+  renderAuth();
+}
+function renderAuth() {
+  const a = ACCT || {}, cl = a.claude || {}, cx = a.codex || {};
+  const menu = document.getElementById('gear-menu');
+  if (menu) {
+    menu.innerHTML = '';
+    [['claude', 'Claude', cl], ['codex', 'Codex', cx]].forEach(([src, name, acc]) => {
+      const b = document.createElement('button');
+      b.className = 'menu-item';
+      if (acc.loggedIn) { b.textContent = t('Sair do') + ' ' + name + (acc.email ? ' (' + acc.email + ')' : ''); b.onclick = () => doLogout(src); }
+      else { b.textContent = t('Entrar no') + ' ' + name; b.onclick = () => doLogin(src); }
+      menu.appendChild(b);
+    });
+  }
+  // barra "ninguém logado": só quando o /api/account carregou E ambos estão deslogados
+  const bar = document.getElementById('loginbar');
+  if (bar) bar.classList.toggle('show', !!ACCT && !cl.loggedIn && !cx.loggedIn);
+}
+async function doLogin(source) {
+  closeMenus();
+  let r; try { r = await (await fetch('/api/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ source }) })).json(); } catch {}
+  if (r && r.ok) { toast(t('Abrindo login no terminal — siga as instruções lá'), 'ok'); setTimeout(loadAccount, 6000); }
+  else toast(t('não consegui abrir o terminal'), 'err');
+}
+async function doLogout(source) {
+  closeMenus();
+  const name = source === 'codex' ? 'Codex' : 'Claude';
+  if (!(await askConfirm(t('Sair da conta') + ' ' + name + '?', { danger: true, okLabel: t('Sair') }))) return;
+  let r; try { r = await (await fetch('/api/logout', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ source }) })).json(); } catch {}
+  if (r && r.ok) { toast(t('Desconectado'), 'ok'); loadAccount(); }
+  else toast(r && r.error ? t(r.error) : t('Falha no logout'), 'err');
 }
 
 // acento do app pelo mix de fontes: só Claude = laranja, só Codex = verde,
