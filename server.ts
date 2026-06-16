@@ -1533,8 +1533,9 @@ const HTML = /* html */ `<!doctype html>
   body.off { padding-top:42px; } /* abre espaço pra barra não cobrir o conteúdo */
   header { display:flex; align-items:center; gap:var(--s4); margin-bottom:var(--s5); position:relative; min-height:34px; }
   h1 { font-family:var(--display); font-weight:500; font-size:23px; letter-spacing:-.01em; margin:0; display:flex; align-items:center; gap:var(--s3); }
-  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none; }
-  .dot.live { background:var(--green); }
+  .logo { width:30px; height:30px; flex:none; color:var(--clay); } /* segue o acento dinâmico */
+  #status-dot { fill:var(--muted); transition:fill .25s; }   /* ponto do baralho = processos vivos */
+  #status-dot.live { fill:var(--green); }
   .sub { color:var(--muted); font-size:13px; font-variant-numeric:tabular-nums; }
   .tabs { display:flex; width:fit-content; gap:var(--s1); margin-bottom:var(--s5); border-bottom:1px solid var(--line); } /* linha só sob as abas, não até o fim */
   .tab { background:transparent; border:0; border-bottom:2px solid transparent; color:var(--muted); font-family:var(--body); font-weight:600; font-size:14px; padding:var(--s3); margin-bottom:-1px; cursor:pointer; transition:color .15s,border-color .15s; display:flex; align-items:center; gap:var(--s2); }
@@ -1760,7 +1761,7 @@ const HTML = /* html */ `<!doctype html>
   </div>
   <div class="wrap">
     <header>
-      <h1><span class="dot" id="status-dot"></span> AgentDeck</h1>
+      <h1><svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="8" width="15" height="20" rx="3" transform="rotate(10 16 18)" fill="currentColor" opacity=".28"/><rect x="8" y="7" width="15" height="20" rx="3" transform="rotate(-4 15 17)" fill="currentColor" opacity=".5"/><rect x="7" y="7" width="15" height="20" rx="3" fill="currentColor"/><rect x="10" y="11" width="8" height="2.2" rx="1.1" fill="var(--bg)"/><rect x="10" y="15.4" width="9" height="1.6" rx=".8" fill="var(--bg)" opacity=".5"/><rect x="10" y="18.6" width="6.5" height="1.6" rx=".8" fill="var(--bg)" opacity=".5"/><circle id="status-dot" cx="19.4" cy="22.6" r="2.2" fill="var(--muted)"/></svg>AgentDeck</h1>
       <div class="hdr-right">
         <span class="acct-row" id="acct"></span>
         <button class="upd-pill" id="upd-pill" onclick="doUpdate()" style="display:none"></button>
