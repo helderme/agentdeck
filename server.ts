@@ -1377,7 +1377,24 @@ Bun.serve({
       if (!ws || !ws.folders.length) return json({ ok: false, error: 'workspace vazio' }, 400);
       const editor = editorBin();
       if (!editor) return json({ ok: false, error: 'VS Code/VSCodium não encontrado' });
-      runBg(editor, ['--', ...ws.folders]); // abre todas as pastas numa janela multi-root
+      // gera um .code-workspace com layout que destaca a conversa do Claude: a extensão abre
+      // numa ABA de editor (preferredLocation:panel) e a barra de atividades fica escondida.
+      const wsDir = join(homedir(), '.local', 'share', 'agentdeck', 'vscode');
+      const wsFile = join(wsDir, encodeCwd(ws.name).slice(0, 60) + '.code-workspace');
+      try {
+        mkdirSync(wsDir, { recursive: true });
+        writeFileSync(wsFile, JSON.stringify({
+          folders: ws.folders.map((p) => ({ path: p })),
+          settings: { 'claudeCode.preferredLocation': 'panel', 'workbench.activityBar.location': 'hidden' },
+        }, null, 2));
+        runBg(editor, ['--', wsFile]); // abre o workspace multi-root com o layout
+      } catch {
+        runBg(editor, ['--', ...ws.folders]); // fallback: abre as pastas direto
+      }
+      // abre a conversa do Claude em destaque (chat novo, ciente do workspace)
+      const scheme = editor === 'codium' ? 'vscodium' : 'vscode';
+      const opener = platform() === 'darwin' ? 'open' : 'xdg-open';
+      setTimeout(() => runBg(opener, [scheme + '://anthropic.claude-code/open']), 1800);
       return json({ ok: true });
     }
     if (url.pathname === '/api/history/pin' && req.method === 'POST') {
@@ -2819,10 +2836,14 @@ async function refresh() {
 // ── Poll dos Processos: 2,5s na aba Processos; 20s em segundo plano (mantém o
 // badge/relógio do cabeçalho frescos sem martelar ps+ss+docker); pausa se oculto.
 let pollTimer = null, curTab = 'sessions';
-function pollMs() { return curTab === 'watch' ? 2500 : 20000; }
+function pollMs() { return curTab === 'watch' ? 2500 : curTab === 'sessions' ? 10000 : 20000; }
+function pollTick() {
+  refresh(); // tarefas/containers (badge do watch)
+  if (curTab === 'sessions') { if (sessLoaded) reloadSessionsSilent(); else loadSessions(); } // auto-refresh
+}
 function startPoll() {
   stopPoll();
-  if (document.visibilityState !== 'hidden') { refresh(); pollTimer = setInterval(refresh, pollMs()); }
+  if (document.visibilityState !== 'hidden') { pollTick(); pollTimer = setInterval(pollTick, pollMs()); }
 }
 function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stopPoll(); else startPoll(); });
@@ -2999,6 +3020,18 @@ async function loadSessions() {
   catch { box.innerHTML = '<div class="empty">' + t('Falha ao ler as sessões.') + '</div>'; btn.disabled = false; sessLoaded = false; return; }
   btn.disabled = false;
   resetPage();
+  renderSessions();
+}
+
+// auto-refresh silencioso (no poll): re-lê sessões e re-renderiza mantendo filtro/paginação.
+// pula se tiver algo em edição pra não atrapalhar (rename inline, menu aberto, busca focada).
+async function reloadSessionsSilent() {
+  if (document.querySelector('.title-edit') || document.querySelector('.menu.open')) return;
+  if (document.activeElement && document.activeElement.id === 'sess-filter') return;
+  const active = Object.keys(sources).filter(k => sources[k]);
+  if (!active.length) return;
+  let data; try { data = await (await fetch('/api/sessions?sources=' + active.join(','))).json(); } catch { return; }
+  SESS = data.sessions || [];
   renderSessions();
 }
 
