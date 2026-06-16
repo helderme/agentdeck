@@ -617,7 +617,7 @@ const account = () => ({ claude: claudeAccount(), codex: codexAccount() });
 
 // ─── Importar / Exportar sessões ─────────────────────────────────────────
 // Codifica um caminho no nome de pasta que o Claude usa em ~/.claude/projects
-// (cada char fora de [A-Za-z0-9] vira '-'). Ex.: /home/h/efex -> -home-h-efex
+// (cada char fora de [A-Za-z0-9] vira '-'). Ex.: /home/h/proj -> -home-h-proj
 export const encodeProject = (p: string): string => p.replace(/[^A-Za-z0-9]/g, '-');
 export const escRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export const occurrences = (text: string, sub: string): number => (sub ? text.split(sub).length - 1 : 0);
@@ -703,7 +703,7 @@ const locateCodex = (id: string): { path: string; relPath: string } | null => {
 };
 
 // Substitui um caminho só quando ele termina numa fronteira (evita trocar
-// /a/efex dentro de /a/efex-backend).
+// /a/proj dentro de /a/proj-backend).
 export const BOUNDARY = '(?=$|[/"\'\\\\\\s:?<>),;])';
 export const remapContent = (
   text: string,
@@ -901,6 +901,9 @@ const gitOut = (args: string[]): string => {
   try { return execFileSync('git', ['-C', REPO_DIR, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; }
 };
 const isGitRepo = (): boolean => gitOut(['rev-parse', '--is-inside-work-tree']) === 'true';
+// versão do código EM EXECUÇÃO — congelada no boot. O start.sh compara com o HEAD do
+// repo: se diferir (ex.: depois de git pull), reinicia o servidor pra não ficar travado.
+const BOOT_VERSION = gitOut(['rev-parse', 'HEAD']);
 // abre o diálogo nativo (zenity/kdialog/yad) e devolve o caminho absoluto escolhido.
 // async (spawn) pra não travar o servidor enquanto o diálogo está aberto.
 const pickFolder = (): Promise<{ ok: boolean; path?: string; error?: string }> => {
@@ -1020,6 +1023,9 @@ Bun.serve({
     }
 
     // checa atualização do app (git): quantos commits atrás do remoto. fetch silencioso.
+    // versão do servidor em execução (pro start.sh detectar se está desatualizado)
+    if (url.pathname === '/api/version') return json({ version: BOOT_VERSION });
+
     if (url.pathname === '/api/update-check') {
       if (!isGitRepo()) return json({ isGit: false });
       const upstream = gitOut(['rev-parse', '--abbrev-ref', '@{u}']);
@@ -1046,8 +1052,10 @@ Bun.serve({
     // login: abre um terminal com o fluxo interativo (browser/OAuth) do CLI escolhido
     if (url.pathname === '/api/login' && req.method === 'POST') {
       const body = (await req.json().catch(() => ({}))) as { source?: Source };
-      const cmd = body.source === 'codex' ? 'codex login' : 'claude auth login';
-      return json({ ok: openTerminal(cmd, homedir()) });
+      const codex = body.source === 'codex';
+      const bin = codex ? 'codex' : 'claude';
+      if (!hasBin(bin)) return json({ ok: false, notInstalled: true, agent: bin }); // CLI ausente → front mostra como instalar
+      return json({ ok: openTerminal(codex ? 'codex login' : 'claude auth login', homedir()) });
     }
     // logout: remove as credenciais do CLI (não-interativo). Confirme no front antes.
     if (url.pathname === '/api/logout' && req.method === 'POST') {
@@ -1491,8 +1499,9 @@ const HTML = /* html */ `<!doctype html>
   .offbar { position:fixed; top:0; left:0; right:0; z-index:100; display:none; align-items:center; justify-content:center; gap:var(--s3); padding:9px 16px; background:var(--red-soft); color:var(--red); border-bottom:1px solid color-mix(in oklch, var(--red) 45%, var(--line)); font-size:13px; font-weight:600; }
   .offbar.show { display:flex; }
   /* X de fechar no canto sup. esquerdo — garante fechar a janela --app mesmo sem barra do WM */
-  .appclose { position:fixed; top:7px; left:7px; z-index:200; width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:50%; background:var(--surface); color:var(--muted); cursor:pointer; opacity:.45; transition:opacity .15s, color .15s, border-color .15s; }
-  .appclose:hover { opacity:1; color:var(--red); border-color:var(--red); }
+  .appclose { position:fixed; top:8px; left:8px; z-index:200; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1.5px solid var(--red); border-radius:50%; background:var(--red-soft); color:var(--red); cursor:pointer; transition:background .15s, color .15s, transform .1s; }
+  .appclose:hover { background:var(--red); color:#fff; transform:scale(1.08); }
+  .appclose svg { stroke-width:2.5; }
   .appclose svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; }
   .loginbar { position:fixed; top:0; left:0; right:0; z-index:100; display:none; align-items:center; justify-content:center; gap:var(--s3); padding:9px 16px; background:var(--clay-soft); color:var(--clay); border-bottom:1px solid color-mix(in oklch, var(--clay) 45%, var(--line)); font-size:13px; font-weight:600; }
   .loginbar.show { display:flex; }
@@ -1588,9 +1597,8 @@ const HTML = /* html */ `<!doctype html>
   .menu-item.danger { color:var(--red); }
   .menu-item.danger:hover { background:var(--red-soft); }
   .del-target { font-weight:600; color:var(--ink); background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 12px; margin:var(--s3) 0; font-size:14px; word-break:break-word; }
-  .chip.folder-gone { display:inline-flex; align-items:center; gap:4px; color:var(--red); background:var(--red-soft); border:0; cursor:pointer; font-family:var(--body); }
-  .chip.folder-gone svg { width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-  .chip.folder-gone:hover { filter:brightness(1.05); }
+  .btn-folder-gone { color:var(--red); }
+  .btn-folder-gone:hover { background:var(--red-soft); color:var(--red); }
   .upd-pill { display:inline-flex; align-items:center; gap:5px; background:var(--clay-soft); color:var(--clay); border:none; border-radius:999px; padding:6px 12px; font-family:var(--body); font-weight:600; font-size:12.5px; cursor:pointer; white-space:nowrap; }
   .upd-pill svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .upd-pill:hover { filter:brightness(1.06); }
@@ -1636,6 +1644,7 @@ const HTML = /* html */ `<!doctype html>
   .title-wrap .ck { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
   /* fora do fluxo: os chips (1 ou 2) não aumentam a altura do cabeçalho nem descem as abas */
   .hdr-right { display:flex; align-items:center; gap:var(--s3); position:absolute; right:0; top:50%; transform:translateY(-50%); }
+  .hdr-stack { display:flex; flex-direction:column; gap:5px; }
   .acct-row { display:flex; flex-direction:column; align-items:flex-end; gap:4px; } /* chips empilhados (não ficam largos lado a lado) */
   .acct { font-size:12px; font-weight:600; padding:3px 11px; border-radius:999px; white-space:nowrap; max-width:300px; overflow:hidden; text-overflow:ellipsis; }
   .acct.claude { background:var(--claude-brand-soft); color:var(--claude-brand); } /* sempre laranja */
@@ -1737,15 +1746,17 @@ const HTML = /* html */ `<!doctype html>
       <div class="hdr-right">
         <span class="acct-row" id="acct"></span>
         <button class="upd-pill" id="upd-pill" onclick="doUpdate()" style="display:none"></button>
-        <div class="kebab-wrap" style="position:relative">
-          <button class="btn btn-ghost btn-icon" id="gear-btn" onclick="toggleMenu(event, this)" title="Contas (login/logout)"><svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
-          <div class="menu" id="gear-menu"></div>
-        </div>
         <button class="btn btn-ghost btn-icon" id="lang-btn" onclick="toggleLang()" title="English / Português">PT</button>
-        <button class="btn btn-ghost btn-icon" id="theme-btn" onclick="toggleTheme()" title="Alternar tema claro/escuro">
-          <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-          <svg class="ic-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
-        </button>
+        <div class="hdr-stack">
+          <div class="kebab-wrap" style="position:relative">
+            <button class="btn btn-ghost btn-icon" id="gear-btn" onclick="toggleMenu(event, this)" title="Contas (login/logout)"><svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+            <div class="menu" id="gear-menu"></div>
+          </div>
+          <button class="btn btn-ghost btn-icon" id="theme-btn" onclick="toggleTheme()" title="Alternar tema claro/escuro">
+            <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="ic-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -1897,7 +1908,7 @@ const HTML = /* html */ `<!doctype html>
           <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeWsModal()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
         </div>
         <p class="hint" data-i18n>Dê um nome e escolha as pastas do grupo. Use o <b>+ adicionar pasta</b> pra incluir mais de uma.</p>
-        <input class="filter" id="ws-name" placeholder="nome do workspace (ex.: Efex)" />
+        <input class="filter" id="ws-name" placeholder="nome do workspace (ex.: Meu projeto)" />
         <div id="ws-folders"></div>
         <div class="row sess-head" style="margin-top:var(--s2)">
           <button class="btn btn-ghost" onclick="wsAddFolder()">+ adicionar pasta</button>
@@ -1939,6 +1950,16 @@ const HTML = /* html */ `<!doctype html>
           <button class="btn btn-ghost" onclick="closeReloc()">Cancelar</button>
           <button class="btn btn-copy" onclick="doRelocate()">Redirecionar</button>
         </div>
+      </div>
+    </div>
+
+    <div class="modal-bg" id="cli-modal" onclick="if(event.target===this)closeCli()">
+      <div class="modal">
+        <div class="modal-head">
+          <h2 class="section-title" style="margin:0" id="cli-title"></h2>
+          <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeCli()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
+        </div>
+        <div id="cli-body"></div>
       </div>
     </div>
 
@@ -2010,6 +2031,9 @@ const I18N = {
   'Falha no logout': 'Logout failed',
   'falha no logout (CLI ausente?)': 'logout failed (CLI missing?)',
   'Abrindo login no terminal — siga as instruções lá': 'Opening login in the terminal — follow the steps there',
+  'CLI não instalado': 'CLI not installed',
+  'CLI — você precisa dele pra logar e abrir sessões. Instale e reabra o app.': 'CLI — you need it to log in and open sessions. Install it and reopen the app.',
+  'Abrir a documentação': 'Open the documentation',
   'Contas (login/logout)': 'Accounts (login/logout)',
   // — abas, cabeçalho, botões fixos —
   'Sessões': 'Sessions',
@@ -2055,7 +2079,7 @@ const I18N = {
   // — aba Workspaces —
   '+ Novo workspace': '+ New workspace',
   'Novo workspace': 'New workspace',
-  'nome do workspace (ex.: Efex)': 'workspace name (e.g. Efex)',
+  'nome do workspace (ex.: Meu projeto)': 'workspace name (e.g. My project)',
   '+ adicionar pasta': '+ add folder',
   'Criar workspace': 'Create workspace',
   'Salvar alterações': 'Save changes',
@@ -2892,9 +2916,23 @@ function renderAuth() {
 async function doLogin(source) {
   closeMenus();
   let r; try { r = await (await fetch('/api/login', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ source }) })).json(); } catch {}
+  if (r && r.notInstalled) { openCliModal(r.agent || source); return; } // CLI não instalado → mostra como instalar
   if (r && r.ok) { toast(t('Abrindo login no terminal — siga as instruções lá'), 'ok'); setTimeout(loadAccount, 6000); }
   else toast(t('não consegui abrir o terminal'), 'err');
 }
+function openCliModal(agent) {
+  const codex = agent === 'codex';
+  const name = codex ? 'Codex' : 'Claude';
+  const inst = codex ? 'npm install -g @openai/codex' : 'npm install -g @anthropic-ai/claude-code';
+  const doc = codex ? 'https://github.com/openai/codex' : 'https://docs.claude.com/en/docs/claude-code';
+  document.getElementById('cli-title').textContent = name + ' ' + t('CLI não instalado');
+  document.getElementById('cli-body').innerHTML =
+    '<p class="hint">' + name + ' ' + t('CLI — você precisa dele pra logar e abrir sessões. Instale e reabra o app.') + '</p>'
+    + '<pre class="logbox" style="white-space:pre-wrap">' + esc(inst) + '</pre>'
+    + '<p style="margin-top:var(--s3)"><a class="open" href="' + doc + '" target="_blank" rel="noopener">' + t('Abrir a documentação') + ' ↗</a></p>';
+  document.getElementById('cli-modal').classList.add('open');
+}
+function closeCli() { document.getElementById('cli-modal').classList.remove('open'); }
 async function doLogout(source) {
   closeMenus();
   const name = source === 'codex' ? 'Codex' : 'Claude';
@@ -3035,7 +3073,6 @@ function renderSessions() {
           \${originLabel(s.origin) ? \`<span class="chip origin" title="\${esc(t('Sessão iniciada no'))} \${originLabel(s.origin)} \${esc(t('— dá pra retomar tanto no terminal quanto no VS Code'))}">\${originLabel(s.origin)}</span>\` : ''}
           \${s.live ? '<span class="chip live">● ' + t('ativa') + '</span>' : ''}
           <span class="chip folder clickable" title="\${esc(s.folder)} \${esc(t('— clique p/ filtrar por esta pasta'))}" onclick='filterByFolder(\${esc(JSON.stringify(s.folder))})'>\${esc(s.folder)}</span>
-          \${s.folderMissing ? \`<button class="chip folder-gone" title="\${esc(t('A pasta onde esta sessão rodou foi apagada — clique pra apontar pra outra'))}" onclick='relocateUI(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${esc(JSON.stringify(s.folder))})'><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg> \${t('pasta deletada')}</button>\` : ''}
           <span class="chip up">\${fmtAgo(s.mtime)}</span>
           \${s.usage && s.usage.turns ? \`<span class="chip tok" title="\${esc(t('saída (gerados):'))} \${fmtNum(s.usage.out)} · \${esc(t('entrada:'))} \${fmtNum(s.usage.in)} · \${esc(t('cache: criação'))} \${fmtNum(s.usage.cc)} + \${esc(t('leitura'))} \${fmtNum(s.usage.cr)} · \${s.usage.turns} \${esc(t('turnos'))}">\${fmtTok(s.usage.out)} \${t('tok')}</span>\` : ''}
           <span class="chip pid">\${esc(s.id.slice(0,8))}</span>
@@ -3055,6 +3092,7 @@ function renderSessions() {
           </div>
         </div>
         <div class="side-bottom">
+          \${s.folderMissing ? \`<button class="btn btn-icon btn-folder-gone" title="\${esc(t('A pasta onde esta sessão rodou foi apagada — clique pra apontar pra outra'))}" onclick='relocateUI(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${esc(JSON.stringify(s.folder))})'><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg></button>\` : ''}
           <button class="btn btn-vscode btn-icon" title="\${s.source === 'codex' ? esc(t('Abrir a pasta no VS Code')) : esc(t('Abrir no VS Code (pasta + esta conversa na extensão)'))}" onclick='openIn(\${esc(JSON.stringify(s.folder))}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
           <button class="btn btn-resume btn-icon" title="\${esc(t('Copiar comando pra retomar no terminal'))} (\${s.source === 'codex' ? 'codex resume' : 'claude --resume'})" onclick='resume(\${esc(JSON.stringify(s.folder))}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'><svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg></button>
           <button class="btn btn-arch btn-icon" title="\${s.archived ? esc(t('Desarquivar — volta pra lista de ativas')) : esc(t('Arquivar — tira da lista (não apaga nada)'))}" onclick='archive(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${!s.archived}, this)'>\${s.archived ? '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M12 18v-6"/><path d="M9.5 14.5 12 12l2.5 2.5"/></svg>' : '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 13h4"/></svg>'}</button>
@@ -3279,6 +3317,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('help-modal').classList.contains('open')) { closeHelp(); return; }
   if (e.key === 'Escape' && document.getElementById('hist-modal').classList.contains('open')) { closeHistory(); return; }
   if (e.key === 'Escape' && document.getElementById('info-modal').classList.contains('open')) { closeInfo(); return; }
+  if (e.key === 'Escape' && document.getElementById('cli-modal').classList.contains('open')) { closeCli(); return; }
   if (e.key === 'Escape' && document.getElementById('reloc-modal').classList.contains('open')) { closeReloc(); return; }
   if (e.key === 'Escape' && document.getElementById('del-modal').classList.contains('open')) { closeDel(); return; }
   if (e.key === 'Escape' && document.getElementById('imp-modal').classList.contains('open')) { closeImport(); return; }

@@ -14,6 +14,18 @@ URL="http://localhost:$PORT"
 
 listening() { ss -ltn 2>/dev/null | grep -q ":$PORT "; }
 
+# 0) se já tem um servidor no ar mas é de uma versão antiga (ex.: depois de git pull),
+#    reinicia pra carregar o código novo — senão o usuário fica "preso" na versão velha.
+if listening; then
+  running="$(curl -fsS "$URL/api/version" 2>/dev/null | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
+  current="$(git rev-parse HEAD 2>/dev/null)"
+  if [ -n "$running" ] && [ -n "$current" ] && [ "$running" != "$current" ]; then
+    echo "AgentDeck no ar está desatualizado ($running) — reiniciando para $current…"
+    fuser -k "$PORT/tcp" 2>/dev/null || true
+    for _ in $(seq 1 30); do listening || break; sleep 0.1; done
+  fi
+fi
+
 # 1) garante o servidor no ar (acha o bun no PATH ou no caminho padrão de instalação)
 if ! listening; then
   BUN="$(command -v bun 2>/dev/null)"

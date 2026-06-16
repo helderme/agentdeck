@@ -15,11 +15,11 @@ import {
 
 describe('encodeProject / decodeDir', () => {
   test('codifica caminho no nome de pasta do Claude', () => {
-    expect(encodeProject('/home/h/efex')).toBe('-home-h-efex');
+    expect(encodeProject('/home/h/proj')).toBe('-home-h-proj');
     expect(encodeProject('/a/b c/d.e')).toBe('-a-b-c-d-e');
   });
   test('decodeDir reverte o caso simples', () => {
-    expect(decodeDir('-home-h-efex')).toBe('/home/h/efex');
+    expect(decodeDir('-home-h-proj')).toBe('/home/h/proj');
   });
 });
 
@@ -31,12 +31,12 @@ describe('occurrences', () => {
 });
 
 describe('remapContent (fronteira de caminho)', () => {
-  test('NÃO troca /a/efex dentro de /a/efex-backend, mas troca o isolado', () => {
-    const out = remapContent('cd /a/efex-backend && roda /a/efex', [['/a/efex', '/x/y']], {});
-    expect(out).toBe('cd /a/efex-backend && roda /x/y');
+  test('NÃO troca /a/proj dentro de /a/proj-backend, mas troca o isolado', () => {
+    const out = remapContent('cd /a/proj-backend && roda /a/proj', [['/a/proj', '/x/y']], {});
+    expect(out).toBe('cd /a/proj-backend && roda /x/y');
   });
   test('troca em fronteira de aspas/barra', () => {
-    const out = remapContent('"cwd":"/a/efex","x":"/a/efex/sub"', [['/a/efex', '/novo']], {});
+    const out = remapContent('"cwd":"/a/proj","x":"/a/proj/sub"', [['/a/proj', '/novo']], {});
     expect(out).toBe('"cwd":"/novo","x":"/novo/sub"');
   });
   test('remaps manuais aplicam substring literal (caminhos Windows)', () => {
