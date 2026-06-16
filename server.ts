@@ -1596,6 +1596,7 @@ const HTML = /* html */ `<!doctype html>
   .menu-item:hover { background:var(--surface-2); }
   .menu-item.danger { color:var(--red); }
   .menu-item.danger:hover { background:var(--red-soft); }
+  .menu-sep { height:1px; background:var(--line); margin:4px 6px; }
   .del-target { font-weight:600; color:var(--ink); background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 12px; margin:var(--s3) 0; font-size:14px; word-break:break-word; }
   .btn-folder-gone { color:var(--red); }
   .btn-folder-gone:hover { background:var(--red-soft); color:var(--red); }
@@ -2013,6 +2014,15 @@ const I18N = {
   'falha ao atualizar a sessão': 'failed to update the session',
   // — auto-update —
   'Atualizar app': 'Update app',
+  'Verificar atualizações': 'Check for updates',
+  'Verificando atualizações…': 'Checking for updates…',
+  'Você já está na versão mais recente ✓': "You're on the latest version ✓",
+  'Não dá pra verificar (não é um clone git)': "Can't check (not a git clone)",
+  'Sem remoto git configurado': 'No git remote configured',
+  'Atualizado! Pra aplicar a nova versão, recarregue o painel.': 'Updated! Reload the panel to apply the new version.',
+  'Recarregar agora': 'Reload now',
+  'Depois': 'Later',
+  'Recarregando…': 'Reloading…',
   'Atualização disponível': 'Update available',
   'Atualizando…': 'Updating…',
   'Atualizado — reabrir': 'Updated — reopen',
@@ -2368,6 +2378,7 @@ function askConfirm(message, opts) {
     const ok = document.getElementById('confirm-ok'), cancel = document.getElementById('confirm-cancel');
     document.getElementById('confirm-msg').textContent = message;
     ok.textContent = opts.okLabel || t('Confirmar');
+    cancel.textContent = opts.cancelLabel || t('Cancelar');
     ok.className = 'btn ' + (opts.danger ? 'btn-kill' : 'btn-copy');
     bg.classList.add('open');
     setTimeout(() => ok.focus(), 0);
@@ -2736,21 +2747,35 @@ async function checkUpdate() {
   pill.title = t('Atualização disponível') + ' — ' + r.behind + ' commit(s)';
   pill.style.display = '';
 }
+// aplica o update: git pull (servidor reinicia com o código novo) + modal pra recarregar.
+// reabrir/recarregar é preciso porque o servidor em memória só troca de código ao reiniciar.
+async function applyUpdate() {
+  let r; try { r = await (await fetch('/api/update', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' })).json(); } catch {}
+  if (!(r && r.ok)) { toast(t('Falha ao atualizar — rode git pull manualmente'), 'err'); return false; }
+  const reload = await askConfirm(t('Atualizado! Pra aplicar a nova versão, recarregue o painel.'), { okLabel: t('Recarregar agora'), cancelLabel: t('Depois') });
+  if (reload) {
+    toast(t('Recarregando…'), 'ok');
+    const tryReload = (n) => fetch('/api/state', { cache: 'no-store' }).then(x => { if (x.ok) location.reload(); else throw 0; }).catch(() => n > 0 ? setTimeout(() => tryReload(n - 1), 700) : location.reload());
+    setTimeout(() => tryReload(20), 1200);
+  }
+  return true;
+}
 async function doUpdate() {
   const pill = document.getElementById('upd-pill');
-  pill.disabled = true; pill.textContent = t('Atualizando…');
-  let r; try { r = await (await fetch('/api/update', { method:'POST', headers:{'content-type':'application/json'}, body:'{}' })).json(); } catch {}
-  if (r && r.ok) {
-    // o servidor está reiniciando com o código novo — espera ele voltar e recarrega a página
-    pill.innerHTML = '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v4h-4"/></svg> ' + t('Reiniciando…');
-    toast(t('Atualizado! Reiniciando o painel…'), 'ok');
-    const tryReload = (n) => fetch('/api/state', { cache: 'no-store' }).then(x => { if (x.ok) location.reload(); else throw 0; }).catch(() => n > 0 ? setTimeout(() => tryReload(n - 1), 700) : location.reload());
-    setTimeout(() => tryReload(20), 1500);
-  } else {
-    pill.disabled = false;
-    pill.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg> ' + t('Atualizar app');
-    toast(t('Falha ao atualizar — rode git pull manualmente'), 'err');
-  }
+  pill.disabled = true;
+  const ok = await applyUpdate();
+  pill.disabled = false;
+  if (ok) pill.style.display = 'none'; // atualizado → some o pill
+}
+// "Verificar atualizações" (engrenagem): se estiver atualizado avisa; senão, atualiza
+async function checkUpdatesManual() {
+  closeMenus();
+  toast(t('Verificando atualizações…'), 'ok');
+  let r; try { r = await (await fetch('/api/update-check')).json(); } catch {}
+  if (!r || !r.isGit) { toast(t('Não dá pra verificar (não é um clone git)'), 'err'); return; }
+  if (!r.hasUpstream) { toast(t('Sem remoto git configurado'), 'err'); return; }
+  if (!(r.behind > 0)) { toast(t('Você já está na versão mais recente ✓'), 'ok'); return; }
+  await applyUpdate();
 }
 
 async function refresh() {
@@ -2908,6 +2933,10 @@ function renderAuth() {
       else { b.textContent = t('Entrar no') + ' ' + name; b.onclick = () => doLogin(src); }
       menu.appendChild(b);
     });
+    const sep = document.createElement('div'); sep.className = 'menu-sep'; menu.appendChild(sep);
+    const upd = document.createElement('button'); upd.className = 'menu-item';
+    upd.textContent = t('Verificar atualizações'); upd.onclick = () => checkUpdatesManual();
+    menu.appendChild(upd);
   }
   // barra "ninguém logado": só quando o /api/account carregou E ambos estão deslogados
   const bar = document.getElementById('loginbar');
