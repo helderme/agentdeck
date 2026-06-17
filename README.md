@@ -1,20 +1,25 @@
-**English** · [Português](README.pt-BR.md)
+<div align="center">
+
+<img src="icon.svg" alt="AgentDeck logo" width="88" />
 
 # AgentDeck
 
-A local dashboard to **list, resume and open** your **Claude Code** and **Codex**
-sessions, build **workspaces** (several repos in a single session), and **watch/stop**
-whatever you left running in the background (dev servers, containers). All rendered — no
-hunting for PIDs in the terminal.
+**Your Claude Code & Codex sessions, in one deck.**
 
-🔗 **Project page:** https://helderme.github.io/agentdeck/
+A local dashboard to **list, resume and open** your sessions, build multi-repo
+**workspaces**, and **watch/stop** what you left running in the background — all
+rendered, no PID hunting.
 
-> Runs **100% local** on `127.0.0.1` — nothing is exposed. It's a **Linux** tool (uses
-> `ps`/`ss`; `code`, `docker`, a browser and a folder picker are optional).
+[**🔗 Live site**](https://helderme.github.io/agentdeck/) · [Get started](#get-started) · [Features](#features) · [Português](README.pt-BR.md)
 
-## Get started (≈ 2 min)
+</div>
 
-You only need **[Bun](https://bun.sh)**:
+> Runs **100% local** on `127.0.0.1` — nothing is exposed. A **Linux** tool (uses `ps`/`ss`;
+> `code`, `docker`, a browser and a folder picker are optional).
+
+## Get started
+
+You only need **[Bun](https://bun.sh)** — about 2 minutes:
 
 ```bash
 # 1) install Bun (once)

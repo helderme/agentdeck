@@ -1,20 +1,25 @@
-[English](README.md) · **Português**
+<div align="center">
+
+<img src="icon.svg" alt="logo do AgentDeck" width="88" />
 
 # AgentDeck
 
-Painel local pra **listar, retomar e abrir** suas sessões do **Claude Code** e do
-**Codex**, montar **workspaces** (vários repos numa sessão só) e **ver/finalizar** o
-que ficou rodando em background (dev servers, containers). Tudo renderizado, sem caçar
-PID no terminal.
+**Suas sessões do Claude Code e do Codex, em um deck.**
 
-🔗 **Página do projeto:** https://helderme.github.io/agentdeck/
+Painel local pra **listar, retomar e abrir** suas sessões, montar **workspaces**
+multi-repo e **ver/finalizar** o que ficou rodando em background — tudo renderizado,
+sem caçar PID no terminal.
 
-> Roda **100% local** em `127.0.0.1` — nada é exposto pra fora. É uma ferramenta de
-> **Linux** (usa `ps`/`ss`; `code`, `docker`, navegador e seletor de pasta são opcionais).
+[**🔗 Site**](https://helderme.github.io/agentdeck/) · [Começar](#começar) · [Features](#features) · [English](README.md)
 
-## Começar (≈ 2 min)
+</div>
 
-Só precisa do **[Bun](https://bun.sh)**:
+> Roda **100% local** em `127.0.0.1` — nada é exposto pra fora. Ferramenta de **Linux**
+> (usa `ps`/`ss`; `code`, `docker`, navegador e seletor de pasta são opcionais).
+
+## Começar
+
+Só precisa do **[Bun](https://bun.sh)** — uns 2 minutos:
 
 ```bash
 # 1) instale o Bun (uma vez só)
