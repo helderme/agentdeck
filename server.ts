@@ -1030,9 +1030,11 @@ Bun.serve({
       if (!isGitRepo()) return json({ isGit: false });
       const upstream = gitOut(['rev-parse', '--abbrev-ref', '@{u}']);
       if (!upstream) return json({ isGit: true, hasUpstream: false });
-      gitOut(['fetch', '--quiet']); // rede; se offline, ignora e segue com o que tem
+      // rede: se offline, o fetch falha — NÃO é erro, só não dá pra checar o remoto agora
+      let fetched = false;
+      try { execFileSync('git', ['-C', REPO_DIR, 'fetch', '--quiet'], { stdio: 'ignore', timeout: 15000 }); fetched = true; } catch { fetched = false; }
       const behind = Number(gitOut(['rev-list', '--count', 'HEAD..@{u}']) || '0');
-      return json({ isGit: true, hasUpstream: true, behind, current: gitOut(['rev-parse', '--short', 'HEAD']) });
+      return json({ isGit: true, hasUpstream: true, behind, fetched, current: gitOut(['rev-parse', '--short', 'HEAD']) });
     }
     // atualiza o app: git pull --ff-only (sem merge arriscado). Precisa reabrir o painel depois.
     if (url.pathname === '/api/update' && req.method === 'POST') {
@@ -1619,8 +1621,10 @@ const HTML = /* html */ `<!doctype html>
   .menu-item.danger:hover { background:var(--red-soft); }
   .menu-sep { height:1px; background:var(--line); margin:4px 6px; }
   .del-target { font-weight:600; color:var(--ink); background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 12px; margin:var(--s3) 0; font-size:14px; word-break:break-word; }
-  .btn-folder-gone { color:var(--red); }
-  .btn-folder-gone:hover { background:var(--red-soft); color:var(--red); }
+  /* botão "pasta apagada": vermelho igual ao botão de fechar, altura casando com o arquivar */
+  .btn-folder-gone { display:inline-flex; align-items:center; gap:5px; height:31px; padding:0 10px; background:var(--red-soft); color:var(--red); border:1.5px solid var(--red); }
+  .btn-folder-gone:hover { background:var(--red); color:#fff; }
+  .btn-folder-gone svg { width:15px; height:15px; flex:none; }
   .upd-pill { display:inline-flex; align-items:center; gap:5px; background:var(--clay-soft); color:var(--clay); border:none; border-radius:999px; padding:6px 12px; font-family:var(--body); font-weight:600; font-size:12.5px; cursor:pointer; white-space:nowrap; }
   .upd-pill svg { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .upd-pill:hover { filter:brightness(1.06); }
@@ -1666,7 +1670,8 @@ const HTML = /* html */ `<!doctype html>
   .title-wrap .ck { width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; }
   /* fora do fluxo: os chips (1 ou 2) não aumentam a altura do cabeçalho nem descem as abas */
   .hdr-right { display:flex; align-items:center; gap:var(--s3); position:absolute; right:0; top:50%; transform:translateY(-50%); }
-  .hdr-stack { display:flex; flex-direction:column; gap:5px; }
+  .hdr-stack { display:flex; align-items:flex-end; gap:5px; }   /* bandeira à esquerda, alinhada ao tema */
+  .hdr-col { display:flex; flex-direction:column; gap:5px; }    /* engrenagem em cima, tema embaixo */
   .acct-row { display:flex; flex-direction:column; align-items:flex-end; gap:4px; } /* chips empilhados (não ficam largos lado a lado) */
   .acct { font-size:12px; font-weight:600; padding:3px 11px; border-radius:999px; white-space:nowrap; max-width:300px; overflow:hidden; text-overflow:ellipsis; }
   .acct.claude { background:var(--claude-brand-soft); color:var(--claude-brand); } /* sempre laranja */
@@ -1769,6 +1774,8 @@ const HTML = /* html */ `<!doctype html>
         <span class="acct-row" id="acct"></span>
         <button class="upd-pill" id="upd-pill" onclick="doUpdate()" style="display:none"></button>
         <div class="hdr-stack">
+          <button class="btn btn-ghost btn-icon" id="lang-btn" onclick="toggleLang()" title="English / Português">PT</button>
+          <div class="hdr-col">
           <div class="kebab-wrap" style="position:relative">
             <button class="btn btn-ghost btn-icon" id="gear-btn" onclick="toggleMenu(event, this)" title="Contas (login/logout)"><svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
             <div class="menu" id="gear-menu"></div>
@@ -1777,7 +1784,7 @@ const HTML = /* html */ `<!doctype html>
             <svg class="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
             <svg class="ic-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></svg>
           </button>
-          <button class="btn btn-ghost btn-icon" id="lang-btn" onclick="toggleLang()" title="English / Português">PT</button>
+          </div>
         </div>
       </div>
     </header>
@@ -2025,6 +2032,8 @@ const I18N = {
   'pasta deletada': 'folder deleted',
   'A pasta onde esta sessão rodou foi apagada — clique pra apontar pra outra': 'The folder this session ran in was deleted — click to point it elsewhere',
   'Pasta deletada': 'Folder deleted',
+  'Pasta apagada': 'Folder deleted',
+  'Sem conexão — não deu pra verificar agora': 'Offline — could not check right now',
   'A pasta onde esta sessão foi iniciada não existe mais. O histórico está salvo (em ~/.claude) — escolha uma pasta pra redirecionar a sessão pra lá.': 'The folder this session started in no longer exists. The history is safe (in ~/.claude) — pick a folder to redirect the session there.',
   'nova pasta… (ex.: /home/você/projeto)': 'new folder… (e.g. /home/you/project)',
   'Redirecionar': 'Redirect',
@@ -2795,8 +2804,9 @@ async function checkUpdatesManual() {
   let r; try { r = await (await fetch('/api/update-check')).json(); } catch {}
   if (!r || !r.isGit) { toast(t('Não dá pra verificar (não é um clone git)'), 'err'); return; }
   if (!r.hasUpstream) { toast(t('Sem remoto git configurado'), 'err'); return; }
-  if (!(r.behind > 0)) { toast(t('Você já está na versão mais recente ✓'), 'ok'); return; }
-  await applyUpdate();
+  if (r.behind > 0) { await applyUpdate(); return; }
+  if (r.fetched === false) { toast(t('Sem conexão — não deu pra verificar agora'), 'ok'); return; } // offline: sem erro
+  toast(t('Você já está na versão mais recente ✓'), 'ok');
 }
 
 async function refresh() {
@@ -3158,7 +3168,7 @@ function renderSessions() {
           </div>
         </div>
         <div class="side-bottom">
-          \${s.folderMissing ? \`<button class="btn btn-icon btn-folder-gone" title="\${esc(t('A pasta onde esta sessão rodou foi apagada — clique pra apontar pra outra'))}" onclick='relocateUI(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${esc(JSON.stringify(s.folder))})'><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg></button>\` : \`
+          \${s.folderMissing ? \`<button class="btn btn-folder-gone" title="\${esc(t('A pasta onde esta sessão rodou foi apagada — clique pra apontar pra outra'))}" onclick='relocateUI(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${esc(JSON.stringify(s.folder))})'><svg viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>\${t('Pasta apagada')}</button>\` : \`
           <button class="btn btn-vscode btn-icon" title="\${s.source === 'codex' ? esc(t('Abrir a pasta no VS Code')) : esc(t('Abrir no VS Code (pasta + esta conversa na extensão)'))}" onclick='openIn(\${esc(JSON.stringify(s.folder))}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'><svg viewBox="0 0 24 24"><path d="M23.15 2.587 18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z"/></svg></button>
           <button class="btn btn-resume btn-icon" title="\${esc(t('Copiar comando pra retomar no terminal'))} (\${s.source === 'codex' ? 'codex resume' : 'claude --resume'})" onclick='resume(\${esc(JSON.stringify(s.folder))}, \${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, this)'><svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg></button>\`}
           <button class="btn btn-arch btn-icon" title="\${s.archived ? esc(t('Desarquivar — volta pra lista de ativas')) : esc(t('Arquivar — tira da lista (não apaga nada)'))}" onclick='archive(\${JSON.stringify(s.id)}, \${JSON.stringify(s.source)}, \${!s.archived}, this)'>\${s.archived ? '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M12 18v-6"/><path d="M9.5 14.5 12 12l2.5 2.5"/></svg>' : '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 13h4"/></svg>'}</button>
