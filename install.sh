@@ -30,6 +30,11 @@ EOF
 update-desktop-database "$APPS" >/dev/null 2>&1 || true
 gtk-update-icon-cache "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
 
-command -v bun >/dev/null 2>&1 || echo "⚠ Bun não encontrado — instale com: curl -fsSL https://bun.sh/install | bash"
-echo "✓ AgentDeck instalado. Procure 'AgentDeck' no menu de aplicativos (ou rode: agentdeck)."
-echo "  (janela limpa, modo app, requer um navegador Chromium: Chrome/Chromium/Brave/Edge)"
+echo "✓ AgentDeck instalado — no menu de apps e no comando 'agentdeck'."
+if command -v bun >/dev/null 2>&1 || [ -x "$HOME/.bun/bin/bun" ]; then
+  echo "→ Abrindo o app…"
+  nohup "$BIN/agentdeck" >/dev/null 2>&1 &   # já abre (sobrevive ao fim do script via nohup)
+else
+  echo "⚠ Falta o Bun. Instale e depois rode 'agentdeck':"
+  echo "    curl -fsSL https://bun.sh/install | bash"
+fi

@@ -20,28 +20,20 @@ Só precisa do **[Bun](https://bun.sh)**:
 # 1) instale o Bun (uma vez só)
 curl -fsSL https://bun.sh/install | bash
 
-# 2) clone e rode
+# 2) clone e instale — coloca no menu e já abre o app
 git clone https://github.com/helderme/agentdeck.git
 cd agentdeck
-./start.sh
-```
-
-O `start.sh` sobe o servidor e abre numa **janela de app limpa** (modo `--app` de um
-navegador Chromium; sem Chromium, cai pro navegador padrão). Sem o script, dá pra rodar
-direto: `bun server.ts` e abrir **http://localhost:7799**. Pra parar: **Ctrl+C** (não
-mata os processos do Claude, só o painel).
-
-Porta ocupada? Use outra: `AGENTDECK_PORT=8080 ./start.sh`.
-
-### Instalar como app (atalho no menu)
-
-```bash
 ./install.sh
 ```
 
-Cria um atalho **AgentDeck** no menu de aplicativos (com ícone) e o comando `agentdeck`
-no terminal. Pra desinstalar, apague `~/.local/share/applications/agentdeck.desktop`,
+O `install.sh` coloca um atalho **AgentDeck** no menu de aplicativos (com ícone) e o comando
+`agentdeck`, e **já abre o app** (janela `--app` limpa via Chromium; sem ele, o navegador
+padrão). Pra desinstalar, apague `~/.local/share/applications/agentdeck.desktop`,
 `~/.local/share/icons/hicolor/scalable/apps/agentdeck.svg` e `~/.local/bin/agentdeck`.
+
+**Não quer instalar?** Rode `./start.sh` (só abre a janela), ou `bun server.ts` e abra
+**http://localhost:7799**. Pra parar: **Ctrl+C** (não mata os processos do Claude, só o
+painel). Porta ocupada? `AGENTDECK_PORT=8080 ./start.sh`.
 
 ## O que precisa instalado
 

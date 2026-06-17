@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script>document.documentElement.classList.add('anim')</script>
 <style>
   :root {
     /* warm-paper (light) — same OKLCH tokens as the app */
@@ -98,6 +99,21 @@
   ul.sec .dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--clay); margin-top: 9px; }
 
   footer { border-top: 1px solid var(--line); padding: var(--s6) 0 var(--s7); color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--s3); }
+
+  /* ── animações (contidas; só com JS via .anim, e respeitando prefers-reduced-motion) ── */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+  header.hero { animation: fadeUp .7s ease-out both; }
+  .card { transition: border-color .18s ease, transform .18s ease; }
+  .card:hover { border-color: var(--clay); transform: translateY(-3px); }
+  .btn { transition: filter .15s ease, border-color .15s ease, transform .12s ease; }
+  .btn:hover { transform: translateY(-1px); }
+  .anim .reveal { opacity: 0; transform: translateY(22px); transition: opacity .6s ease-out, transform .6s ease-out; }
+  .anim .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    header.hero { animation: none; }
+    .anim .reveal { opacity: 1; transform: none; transition: none; }
+    .card:hover, .btn:hover { transform: none; }
+  }
 </style>
 </head>
 <body>
@@ -132,7 +148,7 @@
     <p class="local-note" data-i18n="hero.local">Runs <b>100% local</b> on <code>127.0.0.1</code> · Linux · only needs Bun</p>
   </header>
 
-  <section id="features">
+  <section id="features" class="reveal">
     <h2 data-i18n="feat.h2">Three tabs, zero PID hunting</h2>
     <p class="sub" data-i18n="feat.sub">All rendered — you read, resume and manage without memorizing a command or digging through the terminal.</p>
     <div class="cards">
@@ -161,23 +177,20 @@
     </div>
   </section>
 
-  <section id="start">
+  <section id="start" class="reveal">
     <h2 data-i18n="start.h2">Get started in ~2 minutes</h2>
-    <p class="sub" data-i18n="start.sub">You only need <a href="https://bun.sh">Bun</a>. It's a Linux tool.</p>
+    <p class="sub" data-i18n="start.sub">You only need <a href="https://bun.sh">Bun</a>. Clone and run <code>./install.sh</code> — it adds the app to your menu and opens it.</p>
 <pre data-i18n="start.code"><span class="c"># 1) install Bun (once)</span>
 curl -fsSL https://bun.sh/install | bash
 
-<span class="c"># 2) clone and run</span>
+<span class="c"># 2) clone and install — opens AgentDeck</span>
 git clone https://github.com/helderme/agentdeck.git
 cd agentdeck
-./start.sh</pre>
-    <p class="hint" data-i18n="start.hint">The <code>start.sh</code> script boots the server and opens a clean app window.
-      Without it: <code>bun server.ts</code> and open <code>http://localhost:7799</code>. Port
-      taken? <code>AGENTDECK_PORT=8080 ./start.sh</code>. For a menu shortcut, run
-      <code>./install.sh</code>.</p>
+./install.sh</pre>
+    <p class="hint" data-i18n="start.hint"><code>install.sh</code> adds an <b>AgentDeck</b> shortcut to your apps menu and opens it right away. Prefer not to install? Run <code>./start.sh</code> (just opens the window), or <code>bun server.ts</code> and open <code>http://localhost:7799</code>. Port taken? <code>AGENTDECK_PORT=8080</code>.</p>
   </section>
 
-  <section>
+  <section class="reveal">
     <h2 data-i18n="req.h2">What you need installed</h2>
     <p class="sub" data-i18n="req.sub">Only Bun is required. Without an optional tool, just its feature is gone — everything else runs the same.</p>
     <table>
@@ -192,7 +205,7 @@ cd agentdeck
     </table>
   </section>
 
-  <section>
+  <section class="reveal">
     <h2 data-i18n="sec.h2">Secure by default</h2>
     <p class="sub" data-i18n="sec.sub">The panel runs local commands, so it's designed to never leave your machine.</p>
     <ul class="sec">
@@ -229,9 +242,9 @@ cd agentdeck
     'c3.h3': 'Processos',
     'c3.p': 'O que ficou rodando em background — dev servers, containers — com PID, tempo, porta e pasta. Finalize (por PID, porta ou container), reinicie, veja o log ou inicie um processo novo.',
     'start.h2': 'Começar em ~2 minutos',
-    'start.sub': 'Só precisa do <a href="https://bun.sh">Bun</a>. É uma ferramenta de Linux.',
-    'start.code': '<span class="c"># 1) instale o Bun (uma vez só)</span>\ncurl -fsSL https://bun.sh/install | bash\n\n<span class="c"># 2) clone e rode</span>\ngit clone https://github.com/helderme/agentdeck.git\ncd agentdeck\n./start.sh',
-    'start.hint': 'O <code>start.sh</code> sobe o servidor e abre numa janela de app limpa. Sem ele: <code>bun server.ts</code> e abra <code>http://localhost:7799</code>. Porta ocupada? <code>AGENTDECK_PORT=8080 ./start.sh</code>. Pra um atalho no menu, rode <code>./install.sh</code>.',
+    'start.sub': 'Só precisa do <a href="https://bun.sh">Bun</a>. Clone e rode <code>./install.sh</code> — ele coloca o app no menu e já abre.',
+    'start.code': '<span class="c"># 1) instale o Bun (uma vez só)</span>\ncurl -fsSL https://bun.sh/install | bash\n\n<span class="c"># 2) clone e instale — abre o AgentDeck</span>\ngit clone https://github.com/helderme/agentdeck.git\ncd agentdeck\n./install.sh',
+    'start.hint': 'O <code>install.sh</code> coloca um atalho do <b>AgentDeck</b> no menu de apps e já abre. Não quer instalar? Rode <code>./start.sh</code> (só abre a janela), ou <code>bun server.ts</code> e abra <code>http://localhost:7799</code>. Porta ocupada? <code>AGENTDECK_PORT=8080</code>.',
     'req.h2': 'O que precisa instalado',
     'req.sub': 'Só o Bun é obrigatório. Sem uma ferramenta opcional, só a feature dela some — o resto roda igual.',
     'req.th1': 'Ferramenta',
@@ -267,6 +280,18 @@ cd agentdeck
     applyLang();
   }
   applyLang();
+
+  // reveal-on-scroll (fade-up) — progressive enhancement + rede de segurança
+  function revealAll() { document.querySelectorAll('.reveal:not(.in)').forEach(function (el) { el.classList.add('in'); }); }
+  try {
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+      }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+      document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+    } else { revealAll(); }
+  } catch (e) { revealAll(); }
+  setTimeout(revealAll, 1600); // se algo travar, mostra tudo
 </script>
 </body>
 </html>
