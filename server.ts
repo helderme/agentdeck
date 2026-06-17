@@ -1585,6 +1585,9 @@ const HTML = /* html */ `<!doctype html>
   .btn-resume svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .btn-resume.ok { background:var(--green); color:var(--bg); }
   .btn-icon { padding:7px; line-height:0; display:inline-flex; align-items:center; }
+  /* na coluna do cabeçalho, todos os botões viram o MESMO quadrado (a bandeira é emoji, larga) */
+  .hdr-stack .btn-icon { width:32px; height:32px; padding:0; justify-content:center; }
+  .hdr-stack #lang-btn { font-size:15px; line-height:1; }
   .btn-vscode { background:var(--blue-soft); color:var(--blue); }
   .btn-vscode:hover { background:var(--blue); color:var(--bg); }
   .btn-vscode svg { width:15px; height:15px; fill:currentColor; }
