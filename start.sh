@@ -73,8 +73,13 @@ if [ -n "$FF" ]; then
     FFDIR="$HOME/.local/share/agentdeck/firefox"
   fi
   mkdir -p "$FFDIR/chrome"
-  grep -q legacyUserProfileCustomizations "$FFDIR/user.js" 2>/dev/null || \
-    echo 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);' >> "$FFDIR/user.js"
+  # o WM desenha a barra de título (arrastar/fechar) em vez do Firefox (CSD) — senão, com as
+  # abas escondidas pelo userChrome, a janela fica SEM barra nenhuma em alguns WMs (ex.: Parrot).
+  cat > "$FFDIR/user.js" <<'PREFS'
+user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
+user_pref("browser.tabs.inTitlebar", 0);
+user_pref("browser.tabs.drawInTitlebar", false);
+PREFS
   printf '#TabsToolbar, #nav-bar, #PersonalToolbar { visibility: collapse !important; }\n' > "$FFDIR/chrome/userChrome.css"
   exec "$FF" --class=AgentDeck --name=AgentDeck --new-instance --profile "$FFDIR" "$URL" >/dev/null 2>&1
 fi
