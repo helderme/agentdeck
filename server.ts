@@ -2999,8 +2999,14 @@ async function refresh() {
   document.getElementById('badge-watch').textContent = data.tasks.length + data.containers.length;
   document.getElementById('status-dot').classList.toggle('live', data.tasks.length > 0);
 
-  const t = document.getElementById('tasks');
-  t.innerHTML = data.tasks.length ? data.tasks.map(x => \`
+  // NÃO chamar de 't': sombreia a função de i18n t() no escopo inteiro de refresh()
+  // (inclusive nos callbacks abaixo), e todo t('…') daqui pra frente virava
+  // "TypeError: t is not a function". O throw acontecia já no 1º chip, então nem a
+  // lista de processos nem a de containers (que vem depois) chegavam a renderizar:
+  // a aba ficava vazia mesmo com o badge contando certo, e sem nem o texto de
+  // "nada rodando" — que também passa por t().
+  const tasksEl = document.getElementById('tasks');
+  tasksEl.innerHTML = data.tasks.length ? data.tasks.map(x => \`
     <div class="card">
       <div class="main">
         <div class="title">\${esc(folderName(x.cwd) || x.cmd)}</div>
