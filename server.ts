@@ -179,12 +179,67 @@ const procCwd = (pid: number): string => {
   }
 };
 
+// o próprio painel (e o shell que o iniciou) não deve aparecer na lista: quando o
+// AgentDeck é aberto por um `bash`/`zsh` do Claude Code, esse shell carrega o
+// SNAPSHOT_MARK e viraria um "processo em background" nosso. Antes isso era um
+// `!args.includes('claude-terminal-control')` — o nome ANTIGO do projeto, que (a)
+// parou de casar depois do rename pra agentdeck e (b) era largo demais: escondia
+// QUALQUER processo cujo comando citasse essa string, inclusive dev servers
+// rodados de dentro da pasta de instalação. Agora exclui por pid, não por nome.
+const selfPids = (procs: Proc[]): Set<number> => {
+  const byPid = new Map(procs.map((p) => [p.pid, p]));
+  const out = new Set<number>([process.pid]);
+  let cur = byPid.get(process.pid)?.ppid;
+  for (let hop = 0; cur && cur > 1 && hop < 32; hop++) {
+    out.add(cur);
+    cur = byPid.get(cur)?.ppid;
+  }
+  return out;
+};
+
+// Um dev server que VOCÊ subiu no terminal (`npm run dev &`) não tem marcador
+// nenhum e por isso era invisível aqui. O sinal que o pega é escutar uma porta:
+// o `ss -ltnp` sem root só revela o pid dos sockets do próprio usuário, então a
+// lista já sai limitada aos seus processos. Falta separar dev server de app de
+// desktop que também escuta (GitKraken, navegador, …) — e pra isso vale uma
+// ALLOWLIST de runtimes, não uma blocklist de apps: blocklist envelhece mal,
+// cada app novo que abrisse porta vazaria pra lista.
+const DEV_BIN =
+  /^(node|bun|deno|npm|npx|pnpm|yarn|vite|next|nest|tsx|ts-node|nodemon|webpack|parcel|esbuild|rollup|serve|http-server|live-server|python[0-9.]*|uvicorn|gunicorn|hypercorn|daphne|ruby|rails|puma|unicorn|rackup|php|java|dotnet|cargo|hugo|jekyll|caddy|air)$/;
+export const isDevRuntime = (args: string): boolean => {
+  const first = args.trim().split(/\s+/)[0] ?? '';
+  return DEV_BIN.test(first.split('/').pop() ?? '');
+};
+
 const tasks = () => {
   const procs = readProcs();
   const kids = childrenMap(procs);
   const ports = listenPorts();
-  return procs
-    .filter((p) => (p.args.includes(SNAPSHOT_MARK) || p.args.includes(TASK_MARK)) && !p.args.includes('claude-terminal-control'))
+  const mine = selfPids(procs);
+  const byPid = new Map(procs.map((p) => [p.pid, p]));
+
+  // 1) os marcados: iniciados pelo Claude Code (shell snapshot) ou por aqui.
+  const marked = procs.filter((p) => (p.args.includes(SNAPSHOT_MARK) || p.args.includes(TASK_MARK)) && !mine.has(p.pid));
+  const picked = new Set(marked.map((p) => p.pid));
+
+  // `npm run dev` vira npm → node, e é o FILHO que segura o socket. Se um
+  // ancestral já entrou na lista, o findPort dele já mostra essa porta — listar o
+  // filho também renderia duas linhas pro mesmo processo.
+  const coveredByAncestor = (p: Proc): boolean => {
+    let cur = p.ppid;
+    for (let hop = 0; cur && cur > 1 && hop < 32; hop++) {
+      if (picked.has(cur)) return true;
+      cur = byPid.get(cur)?.ppid ?? 0;
+    }
+    return false;
+  };
+
+  // 2) os que escutam porta e são runtime de dev, sem marcador nenhum.
+  const listeners = procs.filter(
+    (p) => ports.has(p.pid) && !mine.has(p.pid) && !picked.has(p.pid) && isDevRuntime(p.args) && !coveredByAncestor(p),
+  );
+
+  return [...marked, ...listeners]
     .map((p) => ({
       pid: p.pid,
       etimes: p.etimes,
@@ -222,7 +277,9 @@ const killTree = (pid: number): { ok: boolean; killed: number[] } => {
 // ─── Sessões do Claude Code ──────────────────────────────────────────────
 // Cada sessão é um .jsonl no nível raiz de ~/.claude/projects/<pasta>/.
 // Os .jsonl aninhados em <uuid>/subagents/ são subagentes — ficam de fora,
-// pois só varremos o primeiro nível de cada pasta de projeto.
+// pois só varremos o primeiro nível de cada pasta de projeto. No Codex o
+// subagente cai na mesma pasta das sessões de verdade, então lá o descarte é
+// explícito (ver subagentParent/codexMeta).
 type Source = 'claude' | 'codex';
 // soma dos tokens da sessão (dos registros "usage" do .jsonl)
 type Usage = { in: number; out: number; cc: number; cr: number; turns: number } | null;
@@ -242,6 +299,7 @@ type Session = {
   live: boolean; // sendo escrita agora ou citada por um processo vivo
   folderMissing: boolean; // a pasta onde a sessão rodou não existe mais (foi apagada/movida)
   source: Source;
+  subagents?: number; // quantos subagentes esta sessão gerou (só Codex; eles não viram card)
 };
 
 // leitura tolerante + escrita atômica (tmp+rename) pros sidecars JSON: um crash
@@ -343,7 +401,9 @@ export const unescapeJson = (s: string): string => {
 // pro Codex (que lê 512KB por arquivo). Entradas de arquivos sumidos são podadas.
 type Parsed = { autoTitle: string; folder: string; lastMsg: string; origin: string; usage: Usage };
 const claudeCache = new Map<string, { mtime: number } & Parsed>();
-const codexCache = new Map<string, { mtime: number } & Parsed>();
+// o Codex guarda também o veredito de subagente (e o pai), pra não reabrir o
+// arquivo só pra descobrir que ele nem entra na lista.
+const codexCache = new Map<string, { mtime: number; subagent?: boolean; parent?: string } & Parsed>();
 const pruneCache = (cache: Map<string, unknown>, alivePaths: Iterable<string>): void => {
   const alive = new Set(alivePaths);
   for (const k of cache.keys()) if (!alive.has(k)) cache.delete(k);
@@ -480,11 +540,62 @@ const claudeSessions = async (archived: Set<string>, names: Record<string, strin
 };
 
 // ─── Codex: ~/.codex/sessions/AAAA/MM/DD/rollout-<ts>-<uuid>.jsonl ────────
-// Sem aiTitle: o título vem do 1º texto do usuário que não seja um bloco de
-// contexto/instrução (<environment_context>, etc.). O cwd está no session_meta.
-export const codexMeta = (head: string): { cwd?: string; title?: string } => {
+// O cwd está no session_meta. O título sai, em ordem: do thread_name do índice
+// (~/.codex/session_index.jsonl, o análogo do aiTitle do Claude — ver
+// codexThreadNames) ou, na falta dele, do 1º texto do usuário que não seja um
+// bloco de contexto/instrução injetado (ver promptText).
+
+// Subagente do modo multi-agente do Codex. Diferente do Claude (que aninha os
+// subagentes em <uuid>/subagents/, fora do nosso scan), o Codex grava o rollout
+// do subagente NA MESMA pasta do dia dos rollouts de verdade — e esse rollout
+// REPETE o histórico inteiro do pai, inclusive o 1º prompt. Sem filtrar, o
+// título/pasta detectados são os DO PAI: uma sessão que gerou 61 subagentes
+// aparecia como 62 cards idênticos.
+// `thread_source` só existe nas CLIs mais novas, então o sinal principal é
+// `source.subagent` — presente em todos. Só a CHAVE importa: o miolo mudou de
+// forma entre versões ({thread_spawn:{…}} hoje, {other:"guardian"} nas alphas
+// 0.126/0.128), e exigir uma forma específica deixava passar rollout antigo.
+const subagentParent = (p: any): { parent?: string } | null => {
+  const sub = p?.source?.subagent;
+  if (!sub && p?.thread_source !== 'subagent') return null;
+  // as variantes antigas não registram pai nenhum → subagente sem ancestral (fica
+  // fora da lista do mesmo jeito, só não soma badge em ninguém).
+  const parent = p?.parent_thread_id ?? sub?.thread_spawn?.parent_thread_id ?? p?.forked_from_id;
+  return { parent: typeof parent === 'string' ? parent : undefined };
+};
+// título próprio do subagente (apelido + última parte do agent_path), pra não
+// herdar o prompt do pai caso ele apareça na lista/no preview de importação.
+const subagentLabel = (p: any): string | undefined => {
+  const nick = typeof p?.agent_nickname === 'string' ? p.agent_nickname : '';
+  const path = typeof p?.agent_path === 'string' ? (p.agent_path.split('/').filter(Boolean).pop() ?? '') : '';
+  return [nick, path].filter(Boolean).join(' · ') || undefined;
+};
+
+// O Codex embute blocos de contexto na 1ª mensagem "do usuário", então pegar o
+// 1º input_text dava o MESMO título pra toda sessão do mesmo repo (o AGENTS.md
+// dali) — 45 cards idênticos aqui. Devolve as palavras do usuário ou null se a
+// mensagem for só bloco injetado. Os offsets são baixos: o 1º prompt de verdade
+// aparece antes de 96KB em todos os 177 rollouts desta máquina.
+const IDE_REQUEST = /^#+ My request for Codex:[ \t]*$/m;
+const promptText = (text: string): string | null => {
+  const t = text.trim();
+  if (!t || t.startsWith('<')) return null; // <environment_context>, <user_instructions>, …
+  if (t.startsWith('# AGENTS.md instructions for')) return null; // AGENTS.md do repo — nunca traz pedido no fim
+  if (/^The following is the Codex agent history\b/.test(t)) return null; // preâmbulo do fluxo de aprovação
+  if (t.startsWith('# Context from my IDE setup')) {
+    // esse bloco (extensão de IDE) CARREGA o pedido no fim, depois do marcador —
+    // então desembrulha em vez de descartar.
+    const m = t.match(IDE_REQUEST);
+    const req = m ? t.slice(m.index! + m[0].length).trim() : '';
+    return req || null;
+  }
+  return t;
+};
+
+export const codexMeta = (head: string): { cwd?: string; title?: string; subagent?: boolean; parent?: string } => {
   let cwd: string | undefined;
   let title: string | undefined;
+  let firstMeta = true;
   for (const line of head.split('\n')) {
     if (!line.trim()) continue;
     let o: any;
@@ -495,16 +606,57 @@ export const codexMeta = (head: string): { cwd?: string; title?: string } => {
     }
     const p = o?.payload;
     if (!p) continue;
-    if (!cwd && o.type === 'session_meta' && typeof p.cwd === 'string') cwd = p.cwd;
+    if (o.type === 'session_meta') {
+      if (!cwd && typeof p.cwd === 'string') cwd = p.cwd;
+      // a 1ª linha é sempre o session_meta do próprio arquivo (o id casa com o do
+      // nome); num subagente o meta do PAI vem replicado logo depois, daí só o
+      // primeiro valer pra decidir. Sai na hora: não precisa varrer o resto.
+      if (firstMeta) {
+        firstMeta = false;
+        const sub = subagentParent(p);
+        if (sub) return { cwd, title: subagentLabel(p), subagent: true, parent: sub.parent };
+      }
+    }
     if (!title && p.type === 'message' && p.role === 'user' && Array.isArray(p.content)) {
-      const c = p.content.find(
-        (x: any) => x?.type === 'input_text' && typeof x.text === 'string' && !x.text.startsWith('<'),
-      );
-      if (c) title = c.text.replace(/\s+/g, ' ').trim().slice(0, 90);
+      for (const x of p.content) {
+        if (x?.type !== 'input_text' || typeof x.text !== 'string') continue;
+        const prompt = promptText(x.text);
+        if (prompt) {
+          title = prompt.replace(/\s+/g, ' ').slice(0, 90).trim();
+          break;
+        }
+      }
     }
     if (cwd && title) break;
   }
   return { cwd, title };
+};
+
+// ~/.codex/session_index.jsonl: {"id","thread_name","updated_at"} — o título que o
+// próprio Codex gera pra sessão, equivalente ao aiTitle do Claude (que já tem
+// preferência ali). Só as CLIs novas escrevem, e só pra parte das sessões, então
+// é preferência e não requisito. Fica FORA do cache por arquivo de propósito: o
+// índice muda sem o rollout mudar, e o cache é invalidado pelo mtime do rollout.
+const codexThreadNames = (): Map<string, string> => {
+  const out = new Map<string, string>();
+  let txt: string;
+  try {
+    txt = readFileSync(join(homedir(), '.codex', 'session_index.jsonl'), 'utf8');
+  } catch {
+    return out; // índice não existe (CLI antiga) — cai no título detectado do rollout
+  }
+  for (const line of txt.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const o = JSON.parse(line) as { id?: unknown; thread_name?: unknown };
+      if (typeof o.id !== 'string' || typeof o.thread_name !== 'string') continue;
+      const name = o.thread_name.replace(/\s+/g, ' ').trim();
+      if (name) out.set(o.id.toLowerCase(), name.slice(0, 90)); // append-only: a última linha do id vence
+    } catch {
+      /* linha cortada/inválida */
+    }
+  }
+  return out;
 };
 
 const codexSessions = async (archived: Set<string>, names: Record<string, string>, flags: Flags): Promise<Session[]> => {
@@ -515,9 +667,13 @@ const codexSessions = async (archived: Set<string>, names: Record<string, string
     return []; // Codex não instalado
   }
   const paths = rel.filter((f) => /(^|\/)rollout-.*\.jsonl$/.test(f)).map((f) => join(CODEX_DIR, f));
+  const threadNames = codexThreadNames();
 
+  // um rollout vira uma sessão da lista OU um subagente (que fica de fora, mas
+  // conta como badge no ancestral visível).
+  type Row = { kind: 'sess'; s: Session } | { kind: 'sub'; id: string; parent?: string } | null;
   const out = await Promise.all(
-    paths.map(async (path): Promise<Session | null> => {
+    paths.map(async (path): Promise<Row> => {
       let mtime: number;
       try {
         const st = statSync(path);
@@ -536,17 +692,36 @@ const codexSessions = async (archived: Set<string>, names: Record<string, string
         } catch {
           /* ignora */
         }
-        const { cwd, title } = codexMeta(head);
-        cached = { mtime, autoTitle: title || '(sem título)', folder: cwd ?? '—', lastMsg: '', origin: '', usage: null };
+        const { cwd, title, subagent, parent } = codexMeta(head);
+        cached = { mtime, autoTitle: title || '(sem título)', folder: cwd ?? '—', lastMsg: '', origin: '', usage: null, subagent, parent };
         codexCache.set(path, cached);
       }
+      if (cached.subagent) return { kind: 'sub', id, parent: cached.parent };
       const key = archKey('codex', id);
       const custom = names[key];
-      return { id, title: custom ?? cached.autoTitle, autoTitle: cached.autoTitle, renamed: custom != null, folder: cached.folder, lastMsg: cached.lastMsg, origin: cached.origin, usage: cached.usage, mtime, archived: archived.has(key), fav: flags.fav.has(key), pinned: flags.pin.has(key), live: false, folderMissing: !!cached.folder && !existsSync(cached.folder), source: 'codex' };
+      const auto = threadNames.get(id.toLowerCase()) ?? cached.autoTitle;
+      return { kind: 'sess', s: { id, title: custom ?? auto, autoTitle: auto, renamed: custom != null, folder: cached.folder, lastMsg: cached.lastMsg, origin: cached.origin, usage: cached.usage, mtime, archived: archived.has(key), fav: flags.fav.has(key), pinned: flags.pin.has(key), live: false, folderMissing: !!cached.folder && !existsSync(cached.folder), source: 'codex' } };
     }),
   );
   pruneCache(codexCache, paths);
-  return out.filter((s): s is Session => s !== null);
+
+  // subagente pode gerar subagente (depth 2+), então sobe pela cadeia de pais
+  // até sair dos subagentes — senão o neto não seria contado em ninguém.
+  const parentOf = new Map<string, string | undefined>();
+  for (const r of out) if (r?.kind === 'sub') parentOf.set(r.id.toLowerCase(), r.parent?.toLowerCase());
+  const subCount = new Map<string, number>();
+  for (const r of out) {
+    if (r?.kind !== 'sub') continue;
+    let anc = parentOf.get(r.id.toLowerCase());
+    for (let hop = 0; anc && parentOf.has(anc) && hop < 32; hop++) anc = parentOf.get(anc);
+    if (anc) subCount.set(anc, (subCount.get(anc) ?? 0) + 1);
+  }
+  for (const r of out) {
+    if (r?.kind !== 'sess') continue;
+    const n = subCount.get(r.s.id.toLowerCase());
+    if (n) r.s.subagents = n;
+  }
+  return out.filter((r): r is { kind: 'sess'; s: Session } => r?.kind === 'sess').map((r) => r.s);
 };
 
 const sessions = async (want: Record<Source, boolean>): Promise<Session[]> => {
@@ -1678,6 +1853,9 @@ const HTML = /* html */ `<!doctype html>
   .acct.codex  { background:var(--codex-brand-soft);  color:var(--codex-brand); }  /* sempre verde */
   .chip.tok { font-family:var(--mono); font-size:11.5px; color:var(--muted); cursor:default; }
   .chip.origin { font-size:11.5px; }
+  /* subagentes gerados pela sessão: os rollouts deles não viram card, então o
+     número fica aqui pra não parecer que a lista perdeu sessões */
+  .chip.subs { font-size:11.5px; color:var(--teal); background:var(--teal-soft); cursor:default; }
   #theme-btn { padding:6px; }
   #theme-btn svg { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .ic-moon { display:none; }
@@ -2001,8 +2179,8 @@ const HTML = /* html */ `<!doctype html>
           <button class="btn btn-ghost btn-icon" title="Fechar" onclick="closeHelp()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round"><path d="M6 6l12 12M6 18L18 6"/></svg></button>
         </div>
         <div class="help-text">
-          <p data-i18n><b>Sessões.</b> Lista as sessões do <b>Claude Code</b> (<code>~/.claude/projects</code>) e do <b>Codex</b> (<code>~/.codex/sessions</code>) — ligue as fontes (Claude/Codex) e clique em <b>Atualizar</b>. Cada sessão mostra pasta, origem (terminal/VS Code), tokens, se está <b>● ativa</b> e um trecho da última mensagem. Filtre por título/pasta (atalho <code>/</code>), clique no chip da pasta pra filtrar por projeto, e <b>Enter</b> retoma a 1ª. Ícones do card (passe o mouse): abrir no <b>VS Code</b> (pasta + a conversa na extensão), <b>retomar</b> (copia <code>claude --resume</code> / <code>codex resume</code> pro terminal), <b>★ favoritar</b>, <b>📌 fixar</b>, <b>⋮</b> (detalhes da sessão e baixar o <code>.json</code>) e <b>arquivar</b> (só organiza a visão, nada é apagado). Renomear é inline (lápis). A lista mostra 20 por vez (<b>Ver mais</b>/<b>Ver todas</b>). O botão <b>Importar</b> (topo) carrega um <code>.json</code> exportado com preview de remap. O acento muda com as fontes: só Claude = laranja, só Codex = verde, ambos/nenhum = azul.</p>
-          <p data-i18n><b>Processos.</b> Lista o que ficou rodando em background (dev servers iniciados pelo Claude + os iniciados aqui), com a pasta de cada um; atualiza a cada 2,5s na aba. Dá pra <b>Iniciar</b> um processo (escolhendo a pasta no seletor do sistema 📁 e o comando), ver o <b>histórico</b> 🕐 dos iniciados (com pin e re-iniciar), <b>Reiniciar</b> ou <b>Finalizar</b> (mata o processo e os filhos com SIGTERM). Também para <b>containers Docker</b>.</p>
+          <p data-i18n><b>Sessões.</b> Lista as sessões do <b>Claude Code</b> (<code>~/.claude/projects</code>) e do <b>Codex</b> (<code>~/.codex/sessions</code>) — ligue as fontes (Claude/Codex) e clique em <b>Atualizar</b>. Conversas de <b>subagente</b> ficam fora da lista nas duas fontes (no Codex o rollout do subagente repete o histórico do pai, o que geraria vários cards com o mesmo título) — quem os gerou mostra um chip com a contagem. Cada sessão mostra pasta, origem (terminal/VS Code), tokens, se está <b>● ativa</b> e um trecho da última mensagem. Filtre por título/pasta (atalho <code>/</code>), clique no chip da pasta pra filtrar por projeto, e <b>Enter</b> retoma a 1ª. Ícones do card (passe o mouse): abrir no <b>VS Code</b> (pasta + a conversa na extensão), <b>retomar</b> (copia <code>claude --resume</code> / <code>codex resume</code> pro terminal), <b>★ favoritar</b>, <b>📌 fixar</b>, <b>⋮</b> (detalhes da sessão e baixar o <code>.json</code>) e <b>arquivar</b> (só organiza a visão, nada é apagado). Renomear é inline (lápis). A lista mostra 20 por vez (<b>Ver mais</b>/<b>Ver todas</b>). O botão <b>Importar</b> (topo) carrega um <code>.json</code> exportado com preview de remap. O acento muda com as fontes: só Claude = laranja, só Codex = verde, ambos/nenhum = azul.</p>
+          <p data-i18n><b>Processos.</b> Lista o que ficou rodando em background (dev servers iniciados pelo Claude + os iniciados aqui + qualquer dev server seu que esteja <b>escutando uma porta</b>, mesmo subido direto no terminal), com a pasta de cada um; atualiza a cada 2,5s na aba. Dá pra <b>Iniciar</b> um processo (escolhendo a pasta no seletor do sistema 📁 e o comando), ver o <b>histórico</b> 🕐 dos iniciados (com pin e re-iniciar), <b>Reiniciar</b> ou <b>Finalizar</b> (mata o processo e os filhos com SIGTERM). Também para <b>containers Docker</b>.</p>
           <p data-i18n>No topo, os chips mostram a conta logada (Claude/Codex). Tudo é local em <code>127.0.0.1</code>: só lê e mata na sua máquina, e nenhum token de login é exposto.</p>
         </div>
       </div>
@@ -2195,6 +2373,10 @@ const I18N = {
   'VS Code': 'VS Code',
   'SDK': 'SDK',
   'tok': 'tok',
+  'subagente': 'subagent',
+  'subagentes': 'subagents',
+  'Esta sessão gerou subagentes; as conversas deles não entram na lista (o rollout de cada um repete o histórico do pai)':
+    'This session spawned subagents; their conversations are not listed (each one\\'s rollout replays the parent history)',
   'porta': 'port',
   'abrir ↗': 'open ↗',
   'auto:': 'auto:',
@@ -2339,10 +2521,10 @@ const I18N = {
     'Preview of what will change (home, cwd, encoded folder) — nothing is written until you <b>Apply</b>. Paths the automatic remap does not cover show up for you to <b>ignore</b> or adjust.',
   'Dê um nome e escolha as pastas do grupo. Use o <b>+ adicionar pasta</b> pra incluir mais de uma.':
     'Give it a name and pick the group folders. Use <b>+ add folder</b> to include more than one.',
-  '<b>Sessões.</b> Lista as sessões do <b>Claude Code</b> (<code>~/.claude/projects</code>) e do <b>Codex</b> (<code>~/.codex/sessions</code>) — ligue as fontes (Claude/Codex) e clique em <b>Atualizar</b>. Cada sessão mostra pasta, origem (terminal/VS Code), tokens, se está <b>● ativa</b> e um trecho da última mensagem. Filtre por título/pasta (atalho <code>/</code>), clique no chip da pasta pra filtrar por projeto, e <b>Enter</b> retoma a 1ª. Ícones do card (passe o mouse): abrir no <b>VS Code</b> (pasta + a conversa na extensão), <b>retomar</b> (copia <code>claude --resume</code> / <code>codex resume</code> pro terminal), <b>★ favoritar</b>, <b>📌 fixar</b>, <b>⋮</b> (detalhes da sessão e baixar o <code>.json</code>) e <b>arquivar</b> (só organiza a visão, nada é apagado). Renomear é inline (lápis). A lista mostra 20 por vez (<b>Ver mais</b>/<b>Ver todas</b>). O botão <b>Importar</b> (topo) carrega um <code>.json</code> exportado com preview de remap. O acento muda com as fontes: só Claude = laranja, só Codex = verde, ambos/nenhum = azul.':
-    '<b>Sessions.</b> Lists the <b>Claude Code</b> (<code>~/.claude/projects</code>) and <b>Codex</b> (<code>~/.codex/sessions</code>) sessions — turn on the sources (Claude/Codex) and click <b>Refresh</b>. Each session shows folder, origin (terminal/VS Code), tokens, whether it is <b>● active</b> and a snippet of the last message. Filter by title/folder (shortcut <code>/</code>), click the folder chip to filter by project, and <b>Enter</b> resumes the first. Card icons (hover): open in <b>VS Code</b> (folder + the conversation in the extension), <b>resume</b> (copies <code>claude --resume</code> / <code>codex resume</code> to the terminal), <b>★ favorite</b>, <b>📌 pin</b>, <b>⋮</b> (session details and download the <code>.json</code>) and <b>archive</b> (just tidies the view, nothing is deleted). Renaming is inline (pencil). The list shows 20 at a time (<b>View more</b>/<b>View all</b>). The <b>Import</b> button (top) loads an exported <code>.json</code> with a remap preview. The accent follows the sources: Claude only = orange, Codex only = green, both/neither = blue.',
-  '<b>Processos.</b> Lista o que ficou rodando em background (dev servers iniciados pelo Claude + os iniciados aqui), com a pasta de cada um; atualiza a cada 2,5s na aba. Dá pra <b>Iniciar</b> um processo (escolhendo a pasta no seletor do sistema 📁 e o comando), ver o <b>histórico</b> 🕐 dos iniciados (com pin e re-iniciar), <b>Reiniciar</b> ou <b>Finalizar</b> (mata o processo e os filhos com SIGTERM). Também para <b>containers Docker</b>.':
-    '<b>Processes.</b> Lists what stayed running in the background (dev servers started by Claude + the ones started here), with each one\\'s folder; refreshes every 2.5s on the tab. You can <b>Start</b> a process (picking the folder in the system picker 📁 and the command), view the <b>history</b> 🕐 of started ones (with pin and re-run), <b>Restart</b> or <b>Stop</b> (kills the process and its children with SIGTERM). It also stops <b>Docker containers</b>.',
+  '<b>Sessões.</b> Lista as sessões do <b>Claude Code</b> (<code>~/.claude/projects</code>) e do <b>Codex</b> (<code>~/.codex/sessions</code>) — ligue as fontes (Claude/Codex) e clique em <b>Atualizar</b>. Conversas de <b>subagente</b> ficam fora da lista nas duas fontes (no Codex o rollout do subagente repete o histórico do pai, o que geraria vários cards com o mesmo título) — quem os gerou mostra um chip com a contagem. Cada sessão mostra pasta, origem (terminal/VS Code), tokens, se está <b>● ativa</b> e um trecho da última mensagem. Filtre por título/pasta (atalho <code>/</code>), clique no chip da pasta pra filtrar por projeto, e <b>Enter</b> retoma a 1ª. Ícones do card (passe o mouse): abrir no <b>VS Code</b> (pasta + a conversa na extensão), <b>retomar</b> (copia <code>claude --resume</code> / <code>codex resume</code> pro terminal), <b>★ favoritar</b>, <b>📌 fixar</b>, <b>⋮</b> (detalhes da sessão e baixar o <code>.json</code>) e <b>arquivar</b> (só organiza a visão, nada é apagado). Renomear é inline (lápis). A lista mostra 20 por vez (<b>Ver mais</b>/<b>Ver todas</b>). O botão <b>Importar</b> (topo) carrega um <code>.json</code> exportado com preview de remap. O acento muda com as fontes: só Claude = laranja, só Codex = verde, ambos/nenhum = azul.':
+    '<b>Sessions.</b> Lists the <b>Claude Code</b> (<code>~/.claude/projects</code>) and <b>Codex</b> (<code>~/.codex/sessions</code>) sessions — turn on the sources (Claude/Codex) and click <b>Refresh</b>. <b>Subagent</b> conversations are left out for both sources (on Codex the subagent rollout replays the parent history, which would produce several cards with the same title) — the session that spawned them shows a chip with the count. Each session shows folder, origin (terminal/VS Code), tokens, whether it is <b>● active</b> and a snippet of the last message. Filter by title/folder (shortcut <code>/</code>), click the folder chip to filter by project, and <b>Enter</b> resumes the first. Card icons (hover): open in <b>VS Code</b> (folder + the conversation in the extension), <b>resume</b> (copies <code>claude --resume</code> / <code>codex resume</code> to the terminal), <b>★ favorite</b>, <b>📌 pin</b>, <b>⋮</b> (session details and download the <code>.json</code>) and <b>archive</b> (just tidies the view, nothing is deleted). Renaming is inline (pencil). The list shows 20 at a time (<b>View more</b>/<b>View all</b>). The <b>Import</b> button (top) loads an exported <code>.json</code> with a remap preview. The accent follows the sources: Claude only = orange, Codex only = green, both/neither = blue.',
+  '<b>Processos.</b> Lista o que ficou rodando em background (dev servers iniciados pelo Claude + os iniciados aqui + qualquer dev server seu que esteja <b>escutando uma porta</b>, mesmo subido direto no terminal), com a pasta de cada um; atualiza a cada 2,5s na aba. Dá pra <b>Iniciar</b> um processo (escolhendo a pasta no seletor do sistema 📁 e o comando), ver o <b>histórico</b> 🕐 dos iniciados (com pin e re-iniciar), <b>Reiniciar</b> ou <b>Finalizar</b> (mata o processo e os filhos com SIGTERM). Também para <b>containers Docker</b>.':
+    '<b>Processes.</b> Lists what stayed running in the background (dev servers started by Claude + the ones started here + any dev server of yours that is <b>listening on a port</b>, even one launched straight from the terminal), with each one\\'s folder; refreshes every 2.5s on the tab. You can <b>Start</b> a process (picking the folder in the system picker 📁 and the command), view the <b>history</b> 🕐 of started ones (with pin and re-run), <b>Restart</b> or <b>Stop</b> (kills the process and its children with SIGTERM). It also stops <b>Docker containers</b>.',
   'No topo, os chips mostram a conta logada (Claude/Codex). Tudo é local em <code>127.0.0.1</code>: só lê e mata na sua máquina, e nenhum token de login é exposto.':
     'At the top, the chips show the signed-in account (Claude/Codex). Everything is local on <code>127.0.0.1</code>: it only reads and kills on your machine, and no login token is exposed.',
 };
@@ -3148,6 +3330,7 @@ function renderSessions() {
           <span class="chip src-\${s.source}">\${s.source === 'codex' ? 'Codex' : 'Claude'}</span>
           \${originLabel(s.origin) ? \`<span class="chip origin" title="\${esc(t('Sessão iniciada no'))} \${originLabel(s.origin)} \${esc(t('— dá pra retomar tanto no terminal quanto no VS Code'))}">\${originLabel(s.origin)}</span>\` : ''}
           \${s.live ? '<span class="chip live">● ' + t('ativa') + '</span>' : ''}
+          \${s.subagents ? \`<span class="chip subs" title="\${esc(t('Esta sessão gerou subagentes; as conversas deles não entram na lista (o rollout de cada um repete o histórico do pai)'))}">\${s.subagents} \${s.subagents === 1 ? t('subagente') : t('subagentes')}</span>\` : ''}
           <span class="chip folder clickable" title="\${esc(s.folder)} \${esc(t('— clique p/ filtrar por esta pasta'))}" onclick='filterByFolder(\${esc(JSON.stringify(s.folder))})'>\${esc(s.folder)}</span>
           <span class="chip up">\${fmtAgo(s.mtime)}</span>
           \${s.usage && s.usage.turns ? \`<span class="chip tok" title="\${esc(t('saída (gerados):'))} \${fmtNum(s.usage.out)} · \${esc(t('entrada:'))} \${fmtNum(s.usage.in)} · \${esc(t('cache: criação'))} \${fmtNum(s.usage.cc)} + \${esc(t('leitura'))} \${fmtNum(s.usage.cr)} · \${s.usage.turns} \${esc(t('turnos'))}">\${fmtTok(s.usage.out)} \${t('tok')}</span>\` : ''}
